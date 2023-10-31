@@ -9,8 +9,8 @@ pub fn add(left: usize, right: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use crate::algs::check;
     use super::*;
+    use crate::algs::check;
 
     #[test]
     fn it_works() {
