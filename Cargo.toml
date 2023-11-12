@@ -11,3 +11,9 @@ rust-version = "1.73"
 
 [dependencies]
 sha3 = "0.10.8"
+rand_core = { version = "0.6.4", default-features = false }
+zeroize = { version = "1.6.0", features = ["zeroize_derive"] }
+
+[features]
+default = ["default-rng"]
+default-rng = ["rand_core/getrandom"]

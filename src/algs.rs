@@ -1,11 +1,9 @@
 #![allow(dead_code)]
 
+use crate::types::{Rq, Tq, Zq, R, T};
+
 pub fn check() { println!("check!\n") }
 
-const Q: u32 = 2u32.pow(23) - 2u32.pow(13) + 1;
-type R = [i32; 100];
-type Tq = [u32; 256];
-type Zq = i32;
 
 /// Algorithm 4 IntegerToBits(x, α) on page 20.
 /// Computes the base-2 representation of x mod 2α (using in little-endian order).
@@ -81,7 +79,7 @@ pub(crate) fn bytes_to_bits(z_bytes: &[u8], y_bits: &mut [bool]) {
 
 /// Algorithm 8 CoefFromThreeBytes(b0, b1, b2) on page 21.
 /// Generates an element of {0, 1, 2, . . . , q − 1} ∪ {⊥}.
-pub(crate) fn coef_from_three_bytes(bbb: [u8; 3]) -> Option<u32> {
+pub(crate) fn coef_from_three_bytes(bbb: [u8; 3]) -> Option<i32> {
     // Input: Bytes b0, b1, b2.
     // Output: An integer modulo q or ⊥.
     // 1: if b2 > 127 then  TODO: simple AND with 0x7F
@@ -90,11 +88,11 @@ pub(crate) fn coef_from_three_bytes(bbb: [u8; 3]) -> Option<u32> {
         bbb[2] - 128
     } else {
         bbb[2]
-    } as u32; // 3: end if
+    } as i32; // 3: end if
               // 4: z ← 2^16 · b_2 + 2^8 · b1 + b0
-    let z = 2u32.pow(16) * b2 + 2u32.pow(8) * (bbb[1] as u32) + (bbb[0] as u32);
+    let z = 2i32.pow(16) * b2 + 2i32.pow(8) * (bbb[1] as i32) + (bbb[0] as i32);
     // 5: if z < q then return z
-    if z < Q {
+    if z < QI {
         return Some(z);
     } else {
         // 6: 6: else return ⊥
@@ -109,7 +107,7 @@ pub(crate) fn coef_from_half_byte<const ETA: usize>(b: u8) -> Option<i32> {
     // Input: Integer b ∈{0, 1, . . . , 15}.
     // Output: An integer between −η and η, or ⊥.
     // 1: if η = 2 and b < 15 then return 2− (b mod 5)
-    debug_assert!(b < 15);
+    debug_assert!(b <= 15);
     if (ETA == 2) & (b < 15) {
         return Some(2 - (b as i32 % 5));
     } else {
@@ -132,11 +130,11 @@ pub(crate) fn simple_bit_pack(w: &R, b: u32, bytes: &mut [u8]) {
     // Output: A byte string of length 32 · bitlen b.
     w.iter()
         .for_each(|element| debug_assert!(*element <= (b as i32)));
-    debug_assert_eq!(bytes.len(), 32 * b as usize);
     let bitlen = (b.ilog2() + 1) as usize;
+    debug_assert_eq!(bytes.len(), 32 * bitlen as usize);
     // 1: z ← ()        ▷ set z to the empty string
-    let mut z = vec![false; bitlen]; // TODO: global buffer?
-                                     // 2: for i from 0 to 255 do
+    let mut z = vec![false; 256 * bitlen]; // TODO: global buffer?
+                                           // 2: for i from 0 to 255 do
     for i in 0..256 {
         // 3: z ← z||IntegerToBits(wi, bitlen b)
         integer_to_bits(w[i] as u32, bitlen, &mut z[i * bitlen..(i + 1) * bitlen]);
@@ -161,7 +159,7 @@ pub(crate) fn bit_pack(w: &[i32], a: u32, b: u32, bytes_out: &mut [u8]) {
     // 2: for i from 0 to 255 do
     for i in 0..=255 {
         // 3: z ← z||IntegerToBits(b − wi, bitlen (a + b))
-        integer_to_bits(b - w[i] as u32, bitlen, &mut z[i * bitlen..(i + 1) * bitlen]);
+        integer_to_bits((b as i32 - w[i]) as u32, bitlen, &mut z[i * bitlen..(i + 1) * bitlen]);
     } // 4: end for
       // 5: return BitsToBytes(z)
     bits_to_bytes(&z, bytes_out)
@@ -204,7 +202,7 @@ pub(crate) fn bit_unpack(v: &[u8], a: u32, b: u32, w: &mut [i32]) {
     // 3: for i from 0 to 255 do
     for i in 0..=255 {
         // 4: wi ← b − BitsToInteger((z[ic], z[ic + 1], . . . z[ic + c − 1]), c)
-        w[i] = b as i32 - bits_to_integer(&z[i * c..i * (c + 1)]) as i32;
+        w[i] = b as i32 - bits_to_integer(&z[i * c..c * (i + 1)]) as i32;
     } // 5: end for
       // 6: return w
 }
@@ -284,16 +282,16 @@ pub(crate) fn pk_encode<const K: usize, const D: usize>(p: &[bool; 256], t1: &[R
     // Output: Public key pk ∈ B^{32+32k(bitlen (q−1)−d)}.
     debug_assert_ne!(pk.len(), 0); // TODO tighten!
     debug_assert_eq!(t1.len(), K);
-    let bitlen = ((Q - 1).ilog2() + 1) as usize - D;
+    let bitlen = ((QU - 1).ilog2() + 1) as usize - D;
     // 1: pk ← BitsToBytes(ρ)
-    bits_to_bytes(p, pk);
+    bits_to_bytes(p, &mut pk[0..32]);
     // 2: for i from 0 to k − 1 do
     for i in 0..=(K - 1) {
         // 3: pk ← pk || SimpleBitPack (t1[i], 2^{bitlen(q−1)−d}-1)
         simple_bit_pack(
             &t1[i],
             2u32.pow(bitlen as u32) - 1,
-            &mut pk[32 + 32 * K * bitlen..32 + 32 * (K + 1) * bitlen],
+            &mut pk[32 + 32 * i * bitlen..32 + 32 * (i + 1) * bitlen],
         );
     } // 4: end for
 } // 5: return pk
@@ -306,7 +304,7 @@ pub(crate) fn pk_decode<const K: usize, const D: usize>(
 ) {
     // Input: Public key pk ∈ B^{32+32k(bitlen(q−1)−d)}.
     // Output: ρ ∈ {0, 1}^256, t1 ∈ Rk with coeffcients in [0, 2^{bitlen(q−1)−d} − 1]).
-    let bitlen = (Q - 1).ilog2() as usize + 1 - D;
+    let bitlen = (QU - 1).ilog2() as usize + 1 - D;
     debug_assert_eq!(pk.len(), 32 + 32 * K * bitlen);
     debug_assert_eq!(t1.len(), K);
     debug_assert!(t1.iter().all(|rk| rk.len() == K)); // TODO: expand to coeff values
@@ -329,8 +327,7 @@ pub(crate) fn pk_decode<const K: usize, const D: usize>(
 // Algorithm 18 skEncode(ρ, K,tr, s1, s2, t0) on page 26.
 // Encodes a secret key for ML-DSA into a byte string.
 pub fn sk_encode<const D: usize, const ETA: usize, const K: usize, const L: usize>(
-    rho: &[bool; 256], k: &[bool; 256], tr: &[bool; 512], s1: &[R], s2: &[R], t0: &[R],
-    sk: &mut [u8],
+    rho: &[u8; 32], k: &[u8; 32], tr: &[u8; 64], s1: &[R], s2: &[R], t0: &[R], sk: &mut [u8],
 ) {
     // Input: ρ ∈ {0,1}^256, K ∈ {0,1}^256, tr ∈ {0,1}^512,
     //        s1 ∈ R^l with coefficients in [−η, η],
@@ -352,11 +349,15 @@ pub fn sk_encode<const D: usize, const ETA: usize, const K: usize, const L: usiz
         .iter()
         .all(|r| r.iter().all(|coeff| (*coeff >= c_min) & (*coeff <= c_max))));
     // 1: sk ← BitsToBytes(ρ) || BitsToBytes(K) || BitsToBytes(tr)
-    bits_to_bytes(rho, &mut sk[0..32]);
-    bits_to_bytes(k, &mut sk[32..64]);
-    bits_to_bytes(tr, &mut sk[64..128]);
+    //bits_to_bytes(rho, &mut sk[0..32]);
+    sk[0..32].copy_from_slice(rho);
+    //bits_to_bytes(k, &mut sk[32..64]);
+    sk[32..64].copy_from_slice(k);
+    //bits_to_bytes(tr, &mut sk[64..128]);
+    sk[64..128].copy_from_slice(tr);
     let start = 128;
-    let step = 32 * ((K + L) * (2 * ETA).ilog2() as usize + 1 + D * K);
+    //let step = 32 * ((K + L) * (2 * ETA).ilog2() as usize + 1 + D * K);
+    let step = 32 * ((2 * ETA).ilog2() as usize + 1);
     // 2: for i from 0 to ℓ − 1 do
     for i in 0..=(L - 1) {
         // 3: sk ← sk || BitPack (s1[i], η, η)
@@ -379,12 +380,13 @@ pub fn sk_encode<const D: usize, const ETA: usize, const K: usize, const L: usiz
         );
     } // 7: end for
     let start = start + K * step;
+    let step = 32 * ((2u32.pow(D as u32 - 1)).ilog2() as usize + 1);
     // 8: for i from 0 to k − 1 do
     for i in 0..=(K - 1) {
         // 9: sk ← sk || BitPack (t0[i], [−2^{d-1} + 1, 2^{d-1}] )
         bit_pack(
             &t0[i],
-            2u32.pow(D as u32 - 1) + 1,
+            2u32.pow(D as u32 - 1) - 1, // orginally a negative# + 1; now positive # - 1
             2u32.pow(D as u32 - 1),
             &mut sk[start + i * step..start + (i + 1) * step],
         );
@@ -395,33 +397,37 @@ pub fn sk_encode<const D: usize, const ETA: usize, const K: usize, const L: usiz
 /// Algorithm 19 skDecode(sk) on page 27.
 /// Reverses the procedure skEncode.
 pub(crate) fn sk_decode<const D: usize, const ETA: usize, const K: usize, const L: usize>(
-    sk: &[u8], rho: &mut [bool; 256], k: &mut [bool; 256], tr: &mut [bool; 512], s1: &mut [R],
+    sk: &[u8], rho: &mut [u8; 32], k: &mut [u8; 32], tr: &mut [u8; 64], s1: &mut [R],
     s2: &mut [R], t0: &mut [R],
 ) {
     // Input: Private key, sk ∈ B^{32+32+64+32·((ℓ+k)·bitlen(2η)+dk)}
     // Output: ρ ∈ {0,1}^256, K ∈ ∈ {0,1}^256, tr ∈ ∈ {0,1}^512,
     // s1 ∈ R^ℓ, s2 ∈ R^k, t0 ∈ R^k with coefficients in [−2^{d−1} + 1, 2^{d−1}].
+    debug_assert_eq!(sk.len(), 32+32+64+32*((L+K)*bitlen(2*ETA)+(D as usize)*K));
     debug_assert_eq!(
         sk.len(),
-        32 + 32 + 64 + 32 * ((L + K) * (2 * ETA).ilog2() as usize + 1 + D * K)
+        32 + 32 + 64 + 32 * ((L + K) * ((2 * ETA).ilog2() as usize + 1) + D * K)
     );
     debug_assert_eq!(s1.len(), L);
     // 1: (f, g, h, y_0, . . . , y_{ℓ−1}, z_0, . . . , z_{k−1}, w_0, . . . , w_{k−1)}) ∈
     //    B^32 × B^32 × B^64 × B^{32·bitlen(2η)}^l × B^{32·bitlen(2η)}^k × B^{32d}^k ← sk
     let bitlen = (2 * ETA).ilog2() as usize + 1;
     // 2: ρ ← BytesToBits( f )
-    bytes_to_bits(&sk[0..32], rho);
+    //bytes_to_bits(&sk[0..32], rho);
+    rho.copy_from_slice(&sk[0..32]);
     // 3: K ← BytesToBits(g)
-    bytes_to_bits(&sk[32..64], k);
+    //bytes_to_bits(&sk[32..64], k);
+    k.copy_from_slice(&sk[32..64]);
     // 4: tr ← BytesToBits(h)
-    bytes_to_bits(&sk[64..128], tr);
+    //bytes_to_bits(&sk[64..128], tr);
+    tr.copy_from_slice(&sk[64..128]);
     let start = 128;
     let step = 32 * bitlen;
     // 5: for i from 0 to ℓ − 1 do
     for i in 0..=(L - 1) {
         // 6: s1[i] ← BitUnpack(yi, η, η)   ▷ This may lie outside [−η, η], if input is malformed
         bit_unpack(
-            &sk[start + i * step..start * (i + 1) * step],
+            &sk[start + i * step..start + (i + 1) * step],
             ETA as u32,
             ETA as u32,
             &mut s1[i],
@@ -432,7 +438,7 @@ pub(crate) fn sk_decode<const D: usize, const ETA: usize, const K: usize, const 
     for i in 0..=(K - 1) {
         // 9: s2[i] ← BitUnpack(zi, η, η) ▷ This may lie outside [−η, η], if input is malformed
         bit_unpack(
-            &sk[start + i * step..start * (i + 1) * step],
+            &sk[start + i * step..start + (i + 1) * step],
             ETA as u32,
             ETA as u32,
             &mut s2[i],
@@ -444,8 +450,8 @@ pub(crate) fn sk_decode<const D: usize, const ETA: usize, const K: usize, const 
     for i in 0..=(K - 1) {
         // 12: t0[i] ← BitUnpack(wi, −2^{d−1} - 1, 2^{d−1})   ▷ This is always in the correct range
         bit_unpack(
-            &sk[start + i * step..start * (i + 1) * step],
-            2u32.pow(D as u32 - 1) + 1,
+            &sk[start + i * step..start + (i + 1) * step],
+            2u32.pow(D as u32 - 1) - 1,
             2u32.pow(D as u32 - 1),
             &mut t0[i],
         );
@@ -527,23 +533,26 @@ pub(crate) fn sig_decode<
 
 /// Algorithm 22 w1Encode(w1) on page 28.
 /// Encodes a polynomial vector w1 into a bit string.
-pub(crate) fn w1_encode<const K: usize, const GAMMA: usize>(w1: &[R], w1_tilde: &mut [bool]) {
+pub(crate) fn w1_encode<const K: usize, const GAMMA2: u32>(w1: &[R; K], w1_tilde: &mut [u8]) {
     // Input: w1 ∈ R^k with coefficients in [0, (q − 1)/(2γ_2) − 1].
     // Output: A bit string representation, w1_tilde ∈ {0,1}^{32k*bitlen((q-1)/(2γ2)−1).
     // 1: w1_tilde ← ()
-    let step = 32 * K * (((Q - 1) / (2 * GAMMA as u32 - 1)).ilog2() as usize + 1 - 1);
+    let step = 32 * K * (((QU - 1) / (2 * GAMMA2 - 1)).ilog2() as usize + 1 - 1);
     // 2: for i from 0 to k − 1 do
     for i in 0..=(K - 1) {
-        let mut bytes = vec![0u8; 32 * (((Q - 1) / (2 * (GAMMA as u32)) - 1).ilog2() as usize + 1)];
+        let mut bytes =
+            vec![0u8; 8 * (((QU - 1) / (2 * (GAMMA2)) - 1).ilog2() as usize + 1)];
         // 3: w1_tilde ← w1_tilde || BytesToBits (SimpleBitPack (w1[i], (q − 1)/(2γ2) − 1))
-        simple_bit_pack(&w1[i], (Q - 1) / (2 * (GAMMA as u32)) - 1, &mut bytes);
-        bytes_to_bits(&bytes, &mut w1_tilde[i * step..(i + 1) * step]);
+        simple_bit_pack(&w1[i], ((QU - 1) / (2 * GAMMA2)) - 1, &mut bytes);
+        //bytes_to_bits(&bytes, &mut w1_tilde[i * step..(i + 1) * step]);
+        w1_tilde.copy_from_slice(&bytes[..]);
     } // 4: end for
 } // 5: return w˜1
 
 
 use sha3::digest::{ExtendableOutput, Update, XofReader};
 use sha3::Shake256;
+
 /// Function H(rho)[[k]] on page 29.
 pub(crate) fn hpk_xof(v: &[u8]) -> impl XofReader {
     let mut hasher = Shake256::default();
@@ -587,7 +596,7 @@ pub(crate) fn sample_in_ball<const TAU: usize>(rho: &[u8; 32], c: &mut R) {
 } // 12: return c
 
 //use sha3::digest::{ExtendableOutput, Update, XofReader};
-use crate::D;
+use crate::{bitlen, D, QI, QU, ZETA};
 use sha3::Shake128;
 
 /// Function H(rho)[[k]] on page 29.
@@ -600,7 +609,7 @@ pub(crate) fn h128pc_xof(v: &[u8; 34]) -> impl XofReader {
 
 /// Algorithm 24 RejNTTPoly(ρ) on page 30.
 /// Samples a polynomial ∈ Tq.
-pub(crate) fn rej_ntt_poly(rho: &[u8; 34], a_hat: &mut Tq) {
+pub(crate) fn rej_ntt_poly(rho: &[u8; 34], a_hat: &mut T) {
     // Input: A seed ρ ∈{0,1}^{272}.
     // Output: An element a_hat ∈ Tq.
     let mut xof = h128pc_xof(rho);
@@ -642,7 +651,7 @@ pub(crate) fn rej_bounded_poly<const ETA: usize>(rho: &[u8; 66], a: &mut R) {
         // 4: z ← H(ρ)JcK
         xof.read(&mut z);
         // 5: z0 ← CoefFromHalfByte(z mod 16, η)
-        let z0 = coef_from_half_byte::<ETA>(z[0] % 16);
+        let z0 = coef_from_half_byte::<ETA>(z[0].rem_euclid(16));
         // 6: z1 ← CoefFromHalfByte(⌊z/16⌋, η)
         let z1 = coef_from_half_byte::<ETA>(z[0] / 16);
         // 7: if z0 != ⊥ then
@@ -668,7 +677,7 @@ pub(crate) fn rej_bounded_poly<const ETA: usize>(rho: &[u8; 66], a: &mut R) {
 /// Algorithm 26 ExpandA(ρ) on page 31.
 /// Samples a k × ℓ matrix A_hat of elements of T_q.
 pub(crate) fn expand_a<const K: usize, const L: usize>(
-    rho: &[u8; 32], cap_a_hat: &mut [[Tq; K]; L],
+    rho: &[u8; 32], cap_a_hat: &mut [[T; K]; L],
 ) {
     // Input: ρ ∈{0,1}^256.
     // Output: Matrix A_hat
@@ -718,9 +727,9 @@ pub(crate) fn expand_mask<const GAMMA1: usize, const L: usize>(
 ) {
     // Input: A bit string ρ ∈{0,1}^512 and a nonnegative integer µ.
     // Output: Vector s ∈ R^ℓ_q.
-    let mut v = [0u8; 32 * 19];
+    let mut v = [0u8; 32 * 20];
     // 1: c ← 1 + bitlen (γ1 − 1) ▷ γ1 is always a power of 2
-    let c = 1 + (GAMMA1 - 1).ilog2() as usize + 1; // c will either be 17 or 19
+    let c = 1 + (GAMMA1 - 1).ilog2() as usize + 1; // c will either be 18 or 20
                                                    // 2: for r from 0 to ℓ − 1 do
     for r in 0..=(L - 1) {
         // 3: n ← IntegerToBits(µ + r, 16)
@@ -734,7 +743,7 @@ pub(crate) fn expand_mask<const GAMMA1: usize, const L: usize>(
         let mut xof = hpk_xof(&big_rho);
         xof.read(&mut v);
         // 5: s[r] ← BitUnpack(v, γ1 − 1, γ1)
-        bit_unpack(&v[0..(c - 1)], GAMMA1 as u32 - 1, GAMMA1 as u32, &mut s[r]);
+        bit_unpack(&v[0..32*c], GAMMA1 as u32 - 1, GAMMA1 as u32, &mut s[r]);
     } // 6: end for
 } // 7: return s
 
@@ -745,16 +754,16 @@ pub(crate) fn power2round(r: Zq, r1: &mut Zq, r0: &mut Zq) {
     // Input: r ∈ Zq.
     // Output: Integers (r1, r0).
     // 1: r+ ← r mod q
-    let rp = r % (Q as i32);
-    // 2: r0 ← r+ mod±2^d
+    let rp = r.rem_euclid(QU as i32); // % (QU as i32);  // TODO euclid rem
+                                      // 2: r0 ← r+ mod±2^d
     let x1 = rp & (2i32.pow(D) - 1);
     *r0 = if x1 < 2i32.pow(D - 1) {
         x1
     } else {
-        2i32.pow(D - 1) - x1
+        (x1 - 2i32.pow(D - 1)).rem_euclid(QI) // % QI
     };
     // 3: return ((r+ − r0)/2^d, r0)
-    *r1 = rp - *r0;
+    *r1 = (rp - *r0) / 2_i32.pow(D);
 }
 
 /// Algorithm 30 Decompose(r) on page 34.
@@ -763,16 +772,16 @@ pub(crate) fn decompose<const GAMMA2: u32>(r: &Zq, r1: &mut Zq, r0: &mut Zq) {
     // Input: r ∈ Zq
     // Output: Integers (r1, r0).
     // 1: r+ ← r mod q
-    let rp = r % (Q as i32);
+    let rp = r.rem_euclid(QI);
     // 2: r0 ← r+ mod±(2γ_2)
-    let x1 = rp % (2 * GAMMA2 as i32);
+    let x1 = rp.rem_euclid(2 * GAMMA2 as i32);
     *r0 = if x1 <= GAMMA2 as i32 {
         x1
     } else {
         GAMMA2 as i32 - x1
     };
     // 3: if r+ − r0 = q − 1 then
-    if (rp - *r0) == (Q as i32 - 1) {
+    if (rp - *r0) == (QU as i32 - 1) {
         // 4: r1 ← 0
         *r1 = 0;
         // 5: r0 ← r0 − 1
@@ -829,14 +838,130 @@ pub(crate) fn use_hit<const GAMMA2: u32>(h: bool, r: Zq) -> Zq {
     // Input:boolean h, r ∈ Zq
     // Output: r1 ∈ Z with 0 ≤ r1 ≤ (q − 1)/(2*γ_2)
     // 1: m ← (q− 1)/(2*γ_2)
-    let m = (Q - 1)/(2*GAMMA2);
+    let m = (QU - 1) / (2 * GAMMA2);
     // 2: (r1, r0) ← Decompose(r)
     let (mut r1, mut r0) = (0, 0);
     decompose::<GAMMA2>(&r, &mut r1, &mut r0);
     // 3: if h = 1 and r0 > 0 return (r1 + 1) mod m
-    if h & (r0 > 0) {return (r1 + 1) % m as i32}
+    if h & (r0 > 0) {
+        return (r1 + 1).rem_euclid(m as i32);
+    }
     // 4: if h = 1 and r0 ≤ 0 return (r1 − 1) mod m
-    if h & (r0 <= 0) {return (r1 - 1) % m as i32}
+    if h & (r0 <= 0) {
+        return (r1 - 1).rem_euclid(m as i32);
+    }
     // 5: return r1
     r1
 }
+
+/// HAC Algorithm 14.76 Right-to-left binary exponentiation mod Q.
+#[must_use]
+pub(crate) fn pow_mod_q(g: i32, e: u8) -> i32 {
+    let g = g as i64;
+    let mut result = 1;
+    let mut s = g;
+    let mut e = e;
+    while e != 0 {
+        if e & 1 != 0 {
+            result = (result * s).rem_euclid(QI as i64);
+        };
+        e >>= 1;
+        if e != 0 {
+            s = (s * s).rem_euclid(QU as i64);
+        };
+    }
+    result.rem_euclid(QI as i64) as i32
+}
+
+
+/// Algorithm 35 NTT(w) on page 36.
+/// Computes the Number-Theoretic Transform.
+pub(crate) fn ntt(w: &R, w_hat: &mut T) {
+    // Input: polynomial w(X) = ∑_{j=0}^{255} w_j X^j ∈ Rq
+    // Output: w_hat = (w_hat[0], . . . , w_hat[255]) ∈ Tq
+    // 1: for j from 0 to 255 do
+    for j in 0..=255 {
+        // 2: w_hat[j] ← w_j
+        w_hat[j] = w[j];
+    } // 3: end for
+      // 4: k ← 0
+    let mut k = 0;
+    // 5: len ← 128
+    let mut len = 128;
+    // 6: while len ≥ 1 do
+    while len >= 1 {
+        // 7: start ← 0
+        let mut start = 0;
+        // 8: while start < 256 do
+        while start < 256 {
+            // 9: k ← k+1
+            k += 1;
+            // 10: zeta ← ζ^{brv(k)} mod q
+            let zeta = pow_mod_q(ZETA, (k as u8).reverse_bits() >> 1) as i64;
+            // 11: for j from start to start + len − 1 do
+            for j in start..=(start + len - 1) {
+                // 12: t ← zeta · w_hat[ j + len]
+                let t = ((zeta * w_hat[j + len] as i64).rem_euclid(QU as i64)) as i32;
+                // 13: w_hat[j + len] ← w_hat[j] − t
+                w_hat[j + len] = (QU as i32 + w_hat[j] - t).rem_euclid(QI);
+                // 14: w_hat[j] ← w_hat[j] + t
+                w_hat[j] = (QU as i32 + w_hat[j] + t).rem_euclid(QI);
+            } // 15: end for
+              // 16: start ← start + 2 · len
+            start = start + 2 * len;
+        } // 17: end while
+          // 18: len ← ⌊len/2⌋
+        len = len / 2;
+    } // 19: end while
+} // 20: return ŵ
+
+
+/// Algorithm 36 NTT−1 (w_hat) on page 37.
+/// Computes the inverse of the Number-Theoretic Transform.
+pub(crate) fn inv_ntt(w_hat: &T, w: &mut R) {
+    // Input: w_hat = (w_hat[0], . . . , w_hat[255]) ∈ Tq
+    // Output: polynomial w(X) = ∑_{j=0}^{255} w_j X^j ∈ Rq
+    // 1: for j from 0 to 255 do
+    for j in 0..=255 {
+        // 2: w_j ← w_hat[j]
+        w[j] = w_hat[j];
+    } // 3: end for
+      // 4: k ← 256
+    let mut k = 256;
+    // 5: len ← 1
+    let mut len = 1;
+    // 6: while len < 256 do
+    while len < 256 {
+        // 7: start ← 0
+        let mut start = 0;
+        // 8: while start < 256 do
+        while start < 256 {
+            // 9: k ← k−1
+            k -= 1;
+            // 10: zeta ← −ζ^{brv(k)} mod q
+            let zeta = -1 * pow_mod_q(ZETA, (k as u8).reverse_bits()); // TODO: reconfirm interpretation of -1 precedence
+                                                                       // 11: for j from start to start + len − 1 do
+            for j in start..=(start + len - 1) {
+                // 12: t ← w_j
+                let t = w[j];
+                // 13: w_j ← t + w_{j+len}
+                w[j] = (t + w[j + len]).rem_euclid(QI);
+                // 14: w_{j+len} ← t − w_{j+len}
+                w[j + len] = (QI + t - w[j + len]).rem_euclid(QI);
+                // 15: w_{j+len} ← zeta · w_{j+len}
+                w[j + len] = ((zeta as i64 * w[j + len] as i64).rem_euclid(QI as i64)) as i32;
+            } // 16: end for
+              // 17: start ← start + 2 · len
+            start += 2 * len;
+        } // 18: end while
+          // 19: len ← 2 · len
+        len *= 2;
+    } // 20: end while
+      // 21: f ← 8347681          ▷ f = 256^{−1} mod q
+    let f = 8347681 as i64; // TODO: recheck type size/boundaries
+                            // 22: for j from 0 to 255 do
+    for j in 0..=255 {
+        // 23: wj ← f ·wj
+        w[j] = ((f * w[j] as i64).rem_euclid(QI as i64)) as Rq;
+    } // 24: end for
+} // 25: return w
