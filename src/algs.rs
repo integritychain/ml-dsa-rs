@@ -1,9 +1,8 @@
-#![allow(dead_code)]
+//#![allow(dead_code)]
 
-use crate::types::{Rq, Tq, Zq, R, T};
+use crate::types::{Rk, Rkl, Rl, Rq, Tq, Zq, R, T};
 
 pub fn check() { println!("check!\n") }
-
 
 /// Algorithm 4 IntegerToBits(x, α) on page 20.
 /// Computes the base-2 representation of x mod 2α (using in little-endian order).
@@ -125,44 +124,69 @@ pub(crate) fn coef_from_half_byte<const ETA: usize>(b: u8) -> Option<i32> {
 
 /// Algorithm 10 SimpleBitPack(w, b) on page 22
 /// Encodes a polynomial w into a byte string.
-pub(crate) fn simple_bit_pack(w: &R, b: u32, bytes: &mut [u8]) {
+pub(crate) fn simple_bit_pack(w: &R, b: u32, bytes_out: &mut [u8]) {
     // Input: b ∈ N and w ∈ R such that the coeffcients of w are all in [0, b].
     // Output: A byte string of length 32 · bitlen b.
-    w.iter()
-        .for_each(|element| debug_assert!(*element <= (b as i32)));
-    let bitlen = (b.ilog2() + 1) as usize;
-    debug_assert_eq!(bytes.len(), 32 * bitlen as usize);
-    // 1: z ← ()        ▷ set z to the empty string
-    let mut z = vec![false; 256 * bitlen]; // TODO: global buffer?
-                                           // 2: for i from 0 to 255 do
-    for i in 0..256 {
-        // 3: z ← z||IntegerToBits(wi, bitlen b)
-        integer_to_bits(w[i] as u32, bitlen, &mut z[i * bitlen..(i + 1) * bitlen]);
-    } // 4: end for
-      // 5: return BitsToBytes(z)
-    bits_to_bytes(&z, bytes);
+    bit_pack2(w, 0, b, bytes_out);
+    // w.iter()
+    //     .for_each(|element| debug_assert!(*element <= (b as i32)));
+    // let bitlen = (b.ilog2() + 1) as usize;
+    // debug_assert_eq!(bytes.len(), 32 * bitlen as usize);
+    // // 1: z ← ()        ▷ set z to the empty string
+    // let mut z = vec![false; 256 * bitlen]; // TODO: global buffer?
+    //                                        // 2: for i from 0 to 255 do
+    // for i in 0..256 {
+    //     // 3: z ← z||IntegerToBits(wi, bitlen b)
+    //     integer_to_bits(w[i] as u32, bitlen, &mut z[i * bitlen..(i + 1) * bitlen]);
+    // } // 4: end for
+    //   // 5: return BitsToBytes(z)
+    // bits_to_bytes(&z, bytes);
 }
 
 
 /// Algorithm 11 BitPack(w, a, b) on page 22
 /// Encodes a polynomial w into a byte string.
-pub(crate) fn bit_pack(w: &[i32], a: u32, b: u32, bytes_out: &mut [u8]) {
-    // Input: a, b ∈ N and w ∈ R such that the coeffcients of w are all in [−a, b].
-    // Output: A byte string of length 32 · bitlen (a + b).
-    debug_assert_eq!(w.len(), 256);
-    w.iter()
-        .for_each(|element| debug_assert!((-*element <= a as i32) & (*element <= b as i32)));
-    let bitlen = ((a + b).ilog2() + 1) as usize;
-    debug_assert_eq!(bytes_out.len(), 32 * bitlen);
-    // 1: z ← () ▷ set z to the empty string
-    let mut z = vec![false; w.len() * bitlen];
-    // 2: for i from 0 to 255 do
-    for i in 0..=255 {
-        // 3: z ← z||IntegerToBits(b − wi, bitlen (a + b))
-        integer_to_bits((b as i32 - w[i]) as u32, bitlen, &mut z[i * bitlen..(i + 1) * bitlen]);
-    } // 4: end for
-      // 5: return BitsToBytes(z)
-    bits_to_bytes(&z, bytes_out)
+pub(crate) fn bit_pack(w: &R, a: u32, b: u32, bytes_out: &mut [u8]) {
+    //let mut bp2 = vec![0u8; bytes_out.len()];
+    bit_pack2(w, a, b, bytes_out);
+    // // Input: a, b ∈ N and w ∈ R such that the coeffcients of w are all in [−a, b].
+    // // Output: A byte string of length 32 · bitlen (a + b).
+    // debug_assert_eq!(w.len(), 256);
+    // w.iter()
+    //     .for_each(|element| debug_assert!((-*element <= a as i32) & (*element <= b as i32)));
+    // let bitlen = ((a + b).ilog2() + 1) as usize;
+    // debug_assert_eq!(bytes_out.len(), 32 * bitlen);
+    // // 1: z ← () ▷ set z to the empty string
+    // let mut z = vec![false; w.len() * bitlen];
+    // // 2: for i from 0 to 255 do
+    // for i in 0..=255 {
+    //     // 3: z ← z||IntegerToBits(b − wi, bitlen (a + b))
+    //     integer_to_bits((b as i32 - w[i]) as u32, bitlen, &mut z[i * bitlen..(i + 1) * bitlen]);
+    // } // 4: end for
+    //   // 5: return BitsToBytes(z)
+    // bits_to_bytes(&z, bytes_out);
+    // assert_eq!(bytes_out, bp2);
+}
+
+pub(crate) fn bit_pack2(w: &R, a: u32, b: u32, bytes_out: &mut [u8]) {
+    debug_assert!((a < u32::MAX / 4) & (b < u32::MAX / 4) & (b >= a)); // Ensure some headroom
+    let bitlen = ((a + b).ilog2() + 1) as usize; // Calculate element bit length
+    debug_assert_eq!(w.len() * bitlen / 8, bytes_out.len()); // correct size
+    debug_assert!((w.len() * bitlen) % 8 == 0); // none left over
+    debug_assert!(w.iter().all(|e| ((-*e <= a as i32) & (*e <=  b as i32)))); // Correct range
+    let mut temp = 0u64;
+    let mut byte_index = 0;
+    let mut bit_index = 0;
+    for e in w {
+        temp = temp | (((b as i64 - *e as i64) as u64) << bit_index);
+        bit_index += bitlen;
+        while bit_index > 7 {
+            bytes_out[byte_index] = temp as u8;
+            temp = temp >> 8;
+            byte_index += 1;
+            bit_index -= 8;
+        }
+    }
 }
 
 
@@ -189,7 +213,7 @@ pub(crate) fn simple_bit_unpack(v: &[u8], b: u32, w: &mut R) {
 
 /// Algorithm 13 BitUnpack(v, a, b) on page 23.
 /// Reverses the procedure BitPack.
-pub(crate) fn bit_unpack(v: &[u8], a: u32, b: u32, w: &mut [i32]) {
+pub(crate) fn bit_unpack(v: &[u8], a: u32, b: u32, w: &mut R) {
     // Input: a, b ∈ N and a byte string v of length 32 · bitlen (a + b).
     // Output: A polynomial w ∈ R, with coeffcients in [b− 2c + 1, b], where c = bitlen (a + b).
     debug_assert_eq!(v.len(), 32 * ((a + b).ilog2() + 1) as usize);
@@ -277,7 +301,9 @@ pub(crate) fn hint_bit_unpack<const OMEGA: usize, const K: usize>(y_bytes: &[u8]
 
 /// Algorithm 16 pkEncode(ρ, t1) on page 25
 /// Encodes a public key for ML-DSA into a byte string.
-pub(crate) fn pk_encode<const K: usize, const D: usize>(p: &[bool; 256], t1: &[R], pk: &mut [u8]) {
+pub(crate) fn pk_encode<const K: usize, const D: usize>(
+    p: &[bool; 256], t1: &Rk<K>, pk: &mut [u8],
+) {
     // Input:ρ ∈ {0, 1}^256, t1 ∈ Rk with coefficients in [0, 2^{bitlen(q−1)−d}-1]).
     // Output: Public key pk ∈ B^{32+32k(bitlen (q−1)−d)}.
     debug_assert_ne!(pk.len(), 0); // TODO tighten!
@@ -300,7 +326,7 @@ pub(crate) fn pk_encode<const K: usize, const D: usize>(p: &[bool; 256], t1: &[R
 /// Algorithm 17 pkDecode(pk) on page 25.
 /// Reverses the procedure pkEncode.
 pub(crate) fn pk_decode<const K: usize, const D: usize>(
-    pk: &[u8], rho: &mut [bool; 256], t1: &mut [R],
+    pk: &[u8], rho: &mut [bool; 256], t1: &mut Rk<K>,
 ) {
     // Input: Public key pk ∈ B^{32+32k(bitlen(q−1)−d)}.
     // Output: ρ ∈ {0, 1}^256, t1 ∈ Rk with coeffcients in [0, 2^{bitlen(q−1)−d} − 1]).
@@ -327,7 +353,7 @@ pub(crate) fn pk_decode<const K: usize, const D: usize>(
 // Algorithm 18 skEncode(ρ, K,tr, s1, s2, t0) on page 26.
 // Encodes a secret key for ML-DSA into a byte string.
 pub fn sk_encode<const D: usize, const ETA: usize, const K: usize, const L: usize>(
-    rho: &[u8; 32], k: &[u8; 32], tr: &[u8; 64], s1: &[R], s2: &[R], t0: &[R], sk: &mut [u8],
+    rho: &[u8; 32], k: &[u8; 32], tr: &[u8; 64], s1: &Rl<L>, s2: &Rk<K>, t0: &Rk<K>, sk: &mut [u8],
 ) {
     // Input: ρ ∈ {0,1}^256, K ∈ {0,1}^256, tr ∈ {0,1}^512,
     //        s1 ∈ R^l with coefficients in [−η, η],
@@ -397,13 +423,13 @@ pub fn sk_encode<const D: usize, const ETA: usize, const K: usize, const L: usiz
 /// Algorithm 19 skDecode(sk) on page 27.
 /// Reverses the procedure skEncode.
 pub(crate) fn sk_decode<const D: usize, const ETA: usize, const K: usize, const L: usize>(
-    sk: &[u8], rho: &mut [u8; 32], k: &mut [u8; 32], tr: &mut [u8; 64], s1: &mut [R],
-    s2: &mut [R], t0: &mut [R],
+    sk: &[u8], rho: &mut [u8; 32], k: &mut [u8; 32], tr: &mut [u8; 64], s1: &mut Rl<L>,
+    s2: &mut Rk<K>, t0: &mut Rk<K>,
 ) {
     // Input: Private key, sk ∈ B^{32+32+64+32·((ℓ+k)·bitlen(2η)+dk)}
     // Output: ρ ∈ {0,1}^256, K ∈ ∈ {0,1}^256, tr ∈ ∈ {0,1}^512,
     // s1 ∈ R^ℓ, s2 ∈ R^k, t0 ∈ R^k with coefficients in [−2^{d−1} + 1, 2^{d−1}].
-    debug_assert_eq!(sk.len(), 32+32+64+32*((L+K)*bitlen(2*ETA)+(D as usize)*K));
+    debug_assert_eq!(sk.len(), 32 + 32 + 64 + 32 * ((L + K) * bitlen(2 * ETA) + (D as usize) * K));
     debug_assert_eq!(
         sk.len(),
         32 + 32 + 64 + 32 * ((L + K) * ((2 * ETA).ilog2() as usize + 1) + D * K)
@@ -457,7 +483,10 @@ pub(crate) fn sk_decode<const D: usize, const ETA: usize, const K: usize, const 
         );
     } // 13: end for
     let (c_min, c_max) = (-1 * 2i32.pow(D as u32 - 1) + 1, 2i32.pow(D as u32 - 1));
-    debug_assert!([s1, s2, t0].iter().all(|var| var
+    debug_assert!([s1].iter().all(|var| var
+        .iter()
+        .all(|r| r.iter().all(|coeff| (*coeff >= c_min) & (*coeff <= c_max)))));
+    debug_assert!([s2, t0].iter().all(|var| var
         .iter()
         .all(|r| r.iter().all(|coeff| (*coeff >= c_min) & (*coeff <= c_max)))));
 } // 14: return (ρ, K,tr, s1, s2, t0)
@@ -472,18 +501,20 @@ pub(crate) fn sig_encode<
     const LAMBDA: usize,
     const OMEGA: usize,
 >(
-    c_tilde: &[bool], z: &[R], h: &[bool], sigma: &mut [u8],
+    c_tilde: &[u8], z: &Rl<L>, h: &[bool], sigma: &mut [u8],
 ) {
     // Input: c_tilde ∈ {0,1}^2λ, z ∈ R^ℓ with coeffcients in [−1*γ_1 + 1, γ_1], h ∈ R^k_2.
     // Output: Signature, σ ∈ B^{λ/4 +l*32*(1+bitlen(γ_1 - 1)+ω+k}
-    debug_assert_eq!(c_tilde.len(), 2 * LAMBDA);
+    debug_assert_eq!(c_tilde.len(), 2 * LAMBDA / 8);
     // 1: σ ← BitsToBytes(c_tilde)
-    bits_to_bytes(&c_tilde, &mut sigma[..2 * LAMBDA * 8]);
+    //bits_to_bytes(&c_tilde, &mut sigma[..2 * LAMBDA * 8]);
+    sigma[..2 * LAMBDA / 8].copy_from_slice(c_tilde);
     let start = 2 * LAMBDA * 8;
     let step = L * 32 * ((LAMBDA - 1).ilog2() as usize + 1) + OMEGA + K;
     // 2: for i from 0 to ℓ − 1 do
     for i in 0..=(L - 1) {
         // 3: σ ← σ || BitPack (z[i], γ_1 − 1, γ_1)
+        panic!("OK - SHOULD SOP HERE");
         bit_pack(
             &z[i],
             GAMMA as u32 - 1,
@@ -504,7 +535,7 @@ pub(crate) fn sig_decode<
     const LAMBDA: usize,
     const OMEGA: usize,
 >(
-    sigma: &[u8], c_tilde: &mut [bool], z: &mut [R], h: &mut R,
+    sigma: &[u8], c_tilde: &mut [bool], z: &mut Rl<L>, h: &mut R,
 ) {
     // Input: Signature, σ ∈ B^{λ/4+ℓ·32·(1+bitlen (γ_1-1))+ω+k
     // Output: c_tilde ∈ {0,1}^2λ, z ∈ R^ℓ_q with coefficients in [−γ_1 + 1, γ1], h ∈ R^k_2 or ⊥.
@@ -533,19 +564,18 @@ pub(crate) fn sig_decode<
 
 /// Algorithm 22 w1Encode(w1) on page 28.
 /// Encodes a polynomial vector w1 into a bit string.
-pub(crate) fn w1_encode<const K: usize, const GAMMA2: u32>(w1: &[R; K], w1_tilde: &mut [u8]) {
+pub(crate) fn w1_encode<const K: usize, const GAMMA2: u32>(w1: &Rk<K>, w1_tilde: &mut [u8]) {
     // Input: w1 ∈ R^k with coefficients in [0, (q − 1)/(2γ_2) − 1].
     // Output: A bit string representation, w1_tilde ∈ {0,1}^{32k*bitlen((q-1)/(2γ2)−1).
     // 1: w1_tilde ← ()
     let step = 32 * K * (((QU - 1) / (2 * GAMMA2 - 1)).ilog2() as usize + 1 - 1);
     // 2: for i from 0 to k − 1 do
     for i in 0..=(K - 1) {
-        let mut bytes =
-            vec![0u8; 8 * (((QU - 1) / (2 * (GAMMA2)) - 1).ilog2() as usize + 1)];
+        let mut bytes = vec![0u8; 4 * 8 * (((QU - 1) / (2 * (GAMMA2)) - 1).ilog2() as usize + 1)];
         // 3: w1_tilde ← w1_tilde || BytesToBits (SimpleBitPack (w1[i], (q − 1)/(2γ2) − 1))
         simple_bit_pack(&w1[i], ((QU - 1) / (2 * GAMMA2)) - 1, &mut bytes);
         //bytes_to_bits(&bytes, &mut w1_tilde[i * step..(i + 1) * step]);
-        w1_tilde.copy_from_slice(&bytes[..]);
+        w1_tilde[i * bytes.len()..(i + 1) * bytes.len()].copy_from_slice(&bytes[..]);
     } // 4: end for
 } // 5: return w˜1
 
@@ -677,7 +707,8 @@ pub(crate) fn rej_bounded_poly<const ETA: usize>(rho: &[u8; 66], a: &mut R) {
 /// Algorithm 26 ExpandA(ρ) on page 31.
 /// Samples a k × ℓ matrix A_hat of elements of T_q.
 pub(crate) fn expand_a<const K: usize, const L: usize>(
-    rho: &[u8; 32], cap_a_hat: &mut [[T; K]; L],
+    rho: &[u8; 32],
+    cap_a_hat: &mut Rkl<K, L>, //[[T; K]; L],
 ) {
     // Input: ρ ∈{0,1}^256.
     // Output: Matrix A_hat
@@ -699,7 +730,7 @@ pub(crate) fn expand_a<const K: usize, const L: usize>(
 /// Algorithm 27 ExpandS(ρ) on page 32.
 /// Samples vectors s1 ∈ R^ℓ_q and s2 ∈ R^k_q, each with coefficients in the interval [−η, η].
 pub(crate) fn expand_s<const ETA: usize, const K: usize, const L: usize>(
-    rho: &[u8; 64], s1: &mut [R; L], s2: &mut [R; K],
+    rho: &[u8; 64], s1: &mut Rl<L>, s2: &mut Rk<K>,
 ) {
     // Input: ρ ∈ {0,1}^512
     // Output: Vectors s1, s2 of polynomials in Rq.
@@ -723,7 +754,7 @@ pub(crate) fn expand_s<const ETA: usize, const K: usize, const L: usize>(
 /// Algorithm 28 ExpandMask(ρ, µ) from page 32.
 /// Samples a vector s ∈ Rℓq such that each polynomial sj has coeffcients between −γ1 + 1 and γ1.
 pub(crate) fn expand_mask<const GAMMA1: usize, const L: usize>(
-    rho: &[u8; 64], mu: u32, s: &mut [R; L],
+    rho: &[u8; 64], mu: u32, s: &mut Rl<L>,
 ) {
     // Input: A bit string ρ ∈{0,1}^512 and a nonnegative integer µ.
     // Output: Vector s ∈ R^ℓ_q.
@@ -743,7 +774,7 @@ pub(crate) fn expand_mask<const GAMMA1: usize, const L: usize>(
         let mut xof = hpk_xof(&big_rho);
         xof.read(&mut v);
         // 5: s[r] ← BitUnpack(v, γ1 − 1, γ1)
-        bit_unpack(&v[0..32*c], GAMMA1 as u32 - 1, GAMMA1 as u32, &mut s[r]);
+        bit_unpack(&v[0..32 * c], GAMMA1 as u32 - 1, GAMMA1 as u32, &mut s[r]);
     } // 6: end for
 } // 7: return s
 
@@ -775,10 +806,10 @@ pub(crate) fn decompose<const GAMMA2: u32>(r: &Zq, r1: &mut Zq, r0: &mut Zq) {
     let rp = r.rem_euclid(QI);
     // 2: r0 ← r+ mod±(2γ_2)
     let x1 = rp.rem_euclid(2 * GAMMA2 as i32);
-    *r0 = if x1 <= GAMMA2 as i32 {
+    *r0 = if x1 <= (GAMMA2) as i32 {
         x1
     } else {
-        GAMMA2 as i32 - x1
+        2 * GAMMA2 as i32 - x1
     };
     // 3: if r+ − r0 = q − 1 then
     if (rp - *r0) == (QU as i32 - 1) {
