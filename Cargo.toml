@@ -17,3 +17,6 @@ zeroize = { version = "1.6.0", features = ["zeroize_derive"] }
 [features]
 default = ["default-rng"]
 default-rng = ["rand_core/getrandom"]
+
+[dev-dependencies]
+rand = "0.8.5"

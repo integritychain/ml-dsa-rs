@@ -1,10 +1,10 @@
-use crate::algs::{
-    bits_to_bytes, bytes_to_bits, expand_a, expand_mask, expand_s, high_bits, hpk_xof, inv_ntt,
-    low_bits, make_hint, ntt, pk_encode, pow_mod_q, power2round, sample_in_ball, sig_encode,
-    sk_decode, sk_encode, w1_encode,
-};
+use crate::algs::{high_bits, inv_ntt, low_bits, make_hint, ntt, pow_mod_q, power2round};
+//use crate::conversion::{bits_to_bytes, bytes_to_bits};
+use crate::encodings::{pk_encode, sig_encode, sk_decode, sk_encode, w1_encode};
+use crate::hashing::{expand_a, expand_mask, expand_s, hpk_xof, sample_in_ball};
+use crate::helpers::bitlen;
 use crate::types::{R, T};
-use crate::{bitlen, D, QI, QU, ZETA};
+use crate::{D, QI, QU, ZETA};
 use rand_core::CryptoRngCore;
 use sha3::digest::XofReader;
 
@@ -89,7 +89,8 @@ pub(crate) fn key_gen<const ETA: usize, const K: usize, const L: usize>(
     let mut xof = hpk_xof(&xi);
     let mut hxi_1024 = [0u8; 128];
     xof.read(&mut hxi_1024);
-    let rho = &hxi_1024[0..32];
+    let mut rho = [0u8; 32];
+    rho.copy_from_slice(&hxi_1024[0..32]); // = &hxi_1024[0..32];
     let rho_prime = &hxi_1024[32..96];
     let k = &hxi_1024[96..128];
     // 3: cap_a_hat ← ExpandA(ρ)        ▷ A is generated and stored in NTT representation as Â
@@ -117,10 +118,10 @@ pub(crate) fn key_gen<const ETA: usize, const K: usize, const L: usize>(
         }
     }
     // 7: pk ← pkEncode(ρ, t_1)
-    let mut rho_bits = [false; 256];
-    bytes_to_bits(&rho, &mut rho_bits);
+    //let mut rho_bits = [false; 256];
+    //bytes_to_bits(&rho, &mut rho_bits);
     //for i in 0..L {
-    pk_encode::<K, { D as usize }>(&rho_bits, &t_1, &mut pk[..]);
+    pk_encode::<{ D as usize }, K>(&rho, &t_1, &mut pk[..]);
     //}
     // 8: tr ← H(BytesToBits(pk), 512)
     let mut tr = [0u8; 64];
@@ -154,11 +155,14 @@ pub(crate) fn sign<
     const TAU: usize,
 >(
     rng: &mut impl CryptoRngCore, sk: &[u8], message: &[u8], sig: &mut [u8],
-) {
+) -> Result<(), &'static str> {
     // Input: Private key, sk ∈ B^{32+32+64+32·((ℓ+k)·bitlen(2η)+dk)} and the message M ∈ {0,1}^∗
     // Output: Signature, σ ∈ B^{32+ℓ·32·(1+bitlen(gamma_1 −1))+ω+k}
-    debug_assert_eq!(sk.len(), 32 + 32 + 64 + 32 * ((L + K) * bitlen(2 * ETA) + (D as usize) * K));
-    debug_assert_eq!(sig.len(), 32 + L * 32 * (1 + bitlen(GAMMA1 - 1)) + OMEGA + K);
+    debug_assert_eq!(
+        sk.len(),
+        32 + 32 + 64 + 32 * ((L + K) * bitlen((2 * ETA).into()) + (D as usize) * K)
+    );
+    debug_assert_eq!(sig.len(), 32 + L * 32 * (1 + bitlen((GAMMA1 - 1) as usize)) + OMEGA + K);
     // 1:  (ρ, K, tr, s_1 , s_2 , t_0 ) ← skDecode(sk)
     let mut rho = [0u8; 32];
     let mut cap_k = [0u8; 32];
@@ -167,7 +171,7 @@ pub(crate) fn sign<
     let mut t_0 = [[0i32; 256]; K];
     sk_decode::<{ D as usize }, ETA, K, L>(
         sk, &mut rho, &mut cap_k, &mut tr, &mut s_1, &mut s_2, &mut t_0,
-    );
+    )?;
     // 2:  s_hat_1 ← NTT(s_1)
     let mut s_hat_1 = [[0i32; 256] as T; L];
     for i in 0..L {
@@ -207,7 +211,7 @@ pub(crate) fn sign<
     // 9:  κ ← 0                         ▷ Initialize counter κ
     let mut k = 0;
     // 10: (z, h) ← ⊥
-    let (mut z, mut h) = (None::<[[i32; 256]; L]>, None::<[[bool; 256]; K]>); // TODO: wrong None type
+    let (mut z, mut h) = (None::<[[i32; 256]; L]>, None::<[[i32; 256]; K]>); // TODO: wrong None type
     let mut c_tilde = vec![0u8; 2 * LAMBDA / 8]; // TODO: check; LAMBDA is in bits not bytes
                                                  // 11: while (z, h) = ⊥ do          ▷ Rejection sampling loop
     while z.is_none() & h.is_none() {
@@ -308,13 +312,13 @@ pub(crate) fn sign<
                 inv_ntt(&x[i], &mut c_t_0[i]);
             }
             // 26: h ← MakeHint(−⟨⟨c_t_0⟩⟩, w − ⟨⟨c_s_2⟩⟩ + ⟨⟨c_t_0⟩⟩)                  ▷ Signer’s hint
-            let mut hh = [[false; 256]; K];
+            let mut hh = [[0i32; 256]; K];
             for i in 0..256 {
                 for k in 0..K {
                     hh[k][i] = make_hint::<GAMMA2>(
                         -1 * z.unwrap()[k][i],
                         w[k][i] - c_s_2[k][i] + c_t_0[k][i],
-                    );
+                    ) as i32;
                 }
             }
             h = Some(hh);
@@ -323,7 +327,7 @@ pub(crate) fn sign<
                 | (h.unwrap()
                     .iter()
                     .flatten()
-                    .filter(|i| **i)
+                    .filter(|i| **i == 1)
                     .collect::<Vec<_>>()
                     .len()
                     > OMEGA)
@@ -336,8 +340,9 @@ pub(crate) fn sign<
         break;
     } // 31: end while
       // 32: σ ← sigEncode(c_tilde, z mod± q, h)
-    sig_encode::<GAMMA1, K, L, LAMBDA, OMEGA>(&c_tilde, &z.unwrap(), &h.unwrap()[1], sig);
+    sig_encode::<GAMMA1, K, L, LAMBDA, OMEGA>(&c_tilde, &z.unwrap(), &h.unwrap(), sig);
     // TODO h [1] is wrong
+    Ok(())
 } // 33: return σ
 
 fn infinity_norm<const ROW: usize, const COL: usize>(w: &[[i32; COL]; ROW]) -> i32 {

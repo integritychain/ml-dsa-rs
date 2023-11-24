@@ -1,10 +1,11 @@
 mod algs;
+mod conversion;
+mod encodings;
+mod hashing;
+mod helpers;
 mod ml_dsa;
 mod smoke_test;
 mod types;
-
-pub const fn bitlen(a: usize) -> usize { a.ilog2() as usize + 1 }
-//pub const fn bitlen(a: impl Into<usize>) -> usize { let a = a.into(); a.ilog2() as usize + 1 }
 
 // const Q: u32 = 8380417;
 const QU: u32 = 2u32.pow(23) - 2u32.pow(13) + 1;
