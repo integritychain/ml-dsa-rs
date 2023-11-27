@@ -3,6 +3,7 @@ mod conversion;
 mod encodings;
 mod hashing;
 mod helpers;
+mod high_low;
 mod ml_dsa;
 mod smoke_test;
 mod types;
@@ -38,7 +39,7 @@ macro_rules! functionality {
 
             pub fn sign(&self, rng: &mut impl CryptoRngCore, message: &[u8]) -> Signature {
                 let mut signature = Signature::default();
-                ml_dsa::sign::<BETA, ETA, GAMMA1, GAMMA2, K, L, LAMBDA, OMEGA, TAU>(
+                ml_dsa::sign::<BETA, ETA, GAMMA1, GAMMA2, K, L, LAMBDA, OMEGA, SK_LEN, TAU>(
                     rng,
                     &self.0,
                     message,
@@ -58,9 +59,8 @@ macro_rules! functionality {
 
         #[must_use]
         pub fn key_gen(rng: &mut impl CryptoRngCore) -> (PublicKey, PrivateKey) {
-            let (mut pk, mut sk) = (PublicKey::default(), PrivateKey::default());
-            ml_dsa::key_gen::<ETA, K, L>(rng, &mut pk.0, &mut sk.0);
-            (pk, sk)
+            let (pk, sk) = ml_dsa::key_gen::<ETA, K, L, PK_LEN, SK_LEN>(rng);
+            (PublicKey(pk), PrivateKey(sk))
         }
     };
 }

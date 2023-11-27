@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::ml_dsa_44;
+    use crate::{ml_dsa_44, ml_dsa_65};
 
     use rand_core::{CryptoRng, RngCore};
 
@@ -36,7 +36,7 @@ mod tests {
         let mut rnd = MyRng::new();
         rnd.push(&[0u8; 32]);
         rnd.push(&[0u8; 32]);
-        let (_pk, sk) = ml_dsa_44::key_gen(&mut rnd);
+        let (_pk, sk) = ml_dsa_65::key_gen(&mut rnd);
         let sig = sk.sign(&mut rnd, b"12345678");
     }
 }

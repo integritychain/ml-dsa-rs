@@ -1,9 +1,8 @@
 use crate::helpers::bitlen;
-use crate::types::R;
+use crate::types::{Zero, R};
 use crate::{
     conversion::{
-        bit_pack, bit_unpack, bytes_to_bits, hint_bit_pack, hint_bit_unpack, simple_bit_pack,
-        simple_bit_unpack,
+        bit_pack, bit_unpack, hint_bit_pack, hint_bit_unpack, simple_bit_pack, simple_bit_unpack,
     },
     QU,
 };
@@ -13,11 +12,13 @@ use crate::{
 
 /// Algorithm 16 pkEncode(ρ, t1) on page 25
 /// Encodes a public key for ML-DSA into a byte string.
-pub(crate) fn pk_encode<const D: usize, const K: usize>(p: &[u8; 32], t1: &[R; K], pk: &mut [u8]) {
+pub(crate) fn pk_encode<const D: usize, const K: usize, const PK_LEN: usize>(
+    p: &[u8; 32], t1: &[R; K],
+) -> [u8; PK_LEN] {
     // Input:ρ ∈ {0, 1}^256, t1 ∈ Rk with coefficients in [0, 2^{bitlen(q−1) − d} - 1]).
     // Output: Public key pk ∈ B^{32+32k(bitlen (q−1)−d)}.
     let bl = bitlen(QU as usize - 1) - D;
-    debug_assert_eq!(pk.len(), 32 + 32 * K * bl);
+    let mut pk = [0u8; PK_LEN];
 
     // 1: pk ← BitsToBytes(ρ)
     pk[0..32].copy_from_slice(p);
@@ -37,7 +38,8 @@ pub(crate) fn pk_encode<const D: usize, const K: usize>(p: &[u8; 32], t1: &[R; K
             &mut pk[32 + 32 * i * bl..32 + 32 * (i + 1) * bl],
         );
     } // 4: end for
-} // 5: return pk
+    pk // 5: return pk
+}
 
 
 /// Algorithm 17 pkDecode(pk) on page 25.
@@ -75,15 +77,22 @@ pub(crate) fn pk_decode<const D: usize, const K: usize>(
 
 /// Algorithm 18 skEncode(ρ, K,tr, s1, s2, t0) on page 26.
 /// Encodes a secret key for ML-DSA into a byte string.
-pub fn sk_encode<const D: usize, const ETA: usize, const K: usize, const L: usize>(
+pub fn sk_encode<
+    const D: usize,
+    const ETA: usize,
+    const K: usize,
+    const L: usize,
+    const SK_LEN: usize,
+>(
     rho: &[u8; 32], k: &[u8; 32], tr: &[u8; 64], s1: &[R; L], s2: &[R; K], t0: &[R; K],
-    sk: &mut [u8],
-) {
+) -> [u8; SK_LEN] {
     // Input: ρ ∈ {0,1}^256, K ∈ {0,1}^256, tr ∈ {0,1}^512,
     //        s1 ∈ R^l with coefficients in [−η, η],
     //        s2 ∈ R^k with coefficients in [−η η],
     //        t0 ∈ R^k with coefficients in [−2^{d-1} + 1, 2^{d-1}].
     // Output: Private key, sk ∈ B^{32+32+64+32·((k+ℓ)·bitlen(2η)+dk)}
+    let mut sk = [0u8; SK_LEN];
+
     let (c_min, c_max) = (-1 * ETA as i32, ETA as i32);
     debug_assert!(s1
         .iter()
@@ -146,21 +155,28 @@ pub fn sk_encode<const D: usize, const ETA: usize, const K: usize, const L: usiz
         //
     } // 10: end for
     debug_assert_eq!(start + K * step, sk.len());
+    sk
 }
 
 
 /// Algorithm 19 skDecode(sk) on page 27.
 /// Reverses the procedure skEncode.
-pub(crate) fn sk_decode<const D: usize, const ETA: usize, const K: usize, const L: usize>(
-    sk: &[u8], rho: &mut [u8; 32], k: &mut [u8; 32], tr: &mut [u8; 64], s1: &mut [R; L],
-    s2: &mut [R; K], t0: &mut [R; K],
-) -> Result<(), &'static str> {
+pub(crate) fn sk_decode<
+    const D: usize,
+    const ETA: usize,
+    const K: usize,
+    const L: usize,
+    const SK_LEN: usize,
+>(
+    sk: &[u8; SK_LEN],
+) -> Result<([u8; 32], [u8; 32], [u8; 64], [R; L], [R; K], [R; K]), &'static str> {
     // Input: Private key, sk ∈ B^{32+32+64+32·((ℓ+k)·bitlen(2η)+dk)}
     // Output: ρ ∈ {0,1}^256, K ∈ ∈ {0,1}^256, tr ∈ ∈ {0,1}^512,
     // s1 ∈ R^ℓ, s2 ∈ R^k, t0 ∈ R^k with coefficients in [−2^{d−1} + 1, 2^{d−1}].
     let bl = bitlen(2 * ETA);
-    debug_assert_eq!(sk.len(), 32 + 32 + 64 + 32 * ((L + K) * bl + D * K));
-
+    //debug_assert_eq!(sk.len(), 32 + 32 + 64 + 32 * ((L + K) * bl + D * K));
+    let (mut rho, mut k, mut tr) = ([0u8; 32], [0u8; 32], [0u8; 64]);
+    let (mut s1, mut s2, mut t0) = ([R::zero(); L], [R::zero(); K], [R::zero(); K]);
 
     // 1: (f, g, h, y_0, . . . , y_{ℓ−1}, z_0, . . . , z_{k−1}, w_0, . . . , w_{k−1)}) ∈
     //    B^32 × B^32 × B^64 × B^{32·bitlen(2η)}^l × B^{32·bitlen(2η)}^k × B^{32d}^k ← sk
@@ -222,7 +238,7 @@ pub(crate) fn sk_decode<const D: usize, const ETA: usize, const K: usize, const 
         .iter()
         .all(|r| r.iter().all(|c| (*c >= c_min) & (*c <= c_max)));
     if s1_ok & s2_ok & t0_ok {
-        return Ok(());
+        return Ok((rho, k, tr, s1, s2, t0));
     } else {
         return Err("Invalid sk_decode deserialization");
     }
@@ -240,8 +256,8 @@ mod tests {
         let mut rho = [0u8; 32];
         let mut t1 = [[0i32; 256]; 4];
         pk_decode::<13, 4>(&random_pk, &mut rho, &mut t1);
-        let mut res = [0u8; 1312];
-        pk_encode::<13, 4>(&rho, &t1, &mut res);
+        //let mut res = [0u8; 1312];
+        let res = pk_encode::<13, 4, 1312>(&rho, &t1);
         assert_eq!(random_pk, res);
     }
 
@@ -252,8 +268,8 @@ mod tests {
         let mut rho = [0u8; 32];
         let mut t1 = [[0i32; 256]; 6];
         pk_decode::<13, 6>(&random_pk, &mut rho, &mut t1);
-        let mut res = [0u8; 1952];
-        pk_encode::<13, 6>(&rho, &t1, &mut res);
+        //let mut res = [0u8; 1952];
+        let res = pk_encode::<13, 6, 1952>(&rho, &t1);
         assert_eq!(random_pk, res);
     }
 
@@ -264,8 +280,8 @@ mod tests {
         let mut rho = [0u8; 32];
         let mut t1 = [[0i32; 256]; 8];
         pk_decode::<13, 8>(&random_pk, &mut rho, &mut t1);
-        let mut res = [0u8; 2592];
-        pk_encode::<13, 8>(&rho, &t1, &mut res);
+        //let mut res = [0u8; 2592];
+        let res = pk_encode::<13, 8, 2592>(&rho, &t1);
         assert_eq!(random_pk, res);
     }
 
@@ -297,22 +313,11 @@ mod tests {
             get_vec(2u32.pow(11)),
         ];
         let mut sk = [0u8; 2560];
-        sk_encode::<13, 2, 4, 4>(&rho, &k, &tr, &s1, &s2, &t0, &mut sk);
-        let (mut rho_test, mut k_test, mut tr_test) = ([0u8; 32], [0u8; 32], [0u8; 64]);
-        let mut tr_test = [0u8; 64];
-        let mut s1_test = [[0i32; 256]; 4];
-        let mut s2_test = [[0i32; 256]; 4];
-        let mut t0_test = [[0i32; 256]; 4];
-        let res = sk_decode::<13, 2, 4, 4>(
-            &sk,
-            &mut rho_test,
-            &mut k_test,
-            &mut tr_test,
-            &mut s1_test,
-            &mut s2_test,
-            &mut t0_test,
-        );
+        let sk = sk_encode::<13, 2, 4, 4, 2560>(&rho, &k, &tr, &s1, &s2, &t0);
+        let res = sk_decode::<13, 2, 4, 4, 2560>(&sk);
         assert!(res.is_ok());
+        let (rho_test, k_test, tr_test, s1_test, s2_test, t0_test) = res.unwrap();
+
         assert!(
             (rho == rho_test)
                 & (k == k_test)
@@ -441,15 +446,21 @@ pub(crate) fn sig_decode<
 pub(crate) fn w1_encode<const K: usize, const GAMMA2: u32>(w1: &[R; K], w1_tilde: &mut [u8]) {
     // Input: w1 ∈ R^k with coefficients in [0, (q − 1)/(2γ_2) − 1].
     // Output: A bit string representation, w1_tilde ∈ {0,1}^{32k*bitlen((q-1)/(2γ2)−1).
+    let qm12gm1 = (QU - 1) / (2 * GAMMA2) - 1;
+    let bl = bitlen(qm12gm1 as usize);
+    debug_assert!(w1
+        .iter()
+        .all(|r| r.iter().all(|&c| (c >= 0) & (c <= qm12gm1 as i32))));
 
     // 1: w1_tilde ← ()
-    let step = 32 * K * (((QU - 1) / (2 * GAMMA2 - 1)).ilog2() as usize + 1 - 1);
+
     // 2: for i from 0 to k − 1 do
+    let step = 4 * 8 * bl;
     for i in 0..=(K - 1) {
-        let mut bytes = vec![0u8; 4 * 8 * (((QU - 1) / (2 * (GAMMA2)) - 1).ilog2() as usize + 1)];
+        //
         // 3: w1_tilde ← w1_tilde || BytesToBits (SimpleBitPack (w1[i], (q − 1)/(2γ2) − 1))
-        simple_bit_pack(&w1[i], ((QU - 1) / (2 * GAMMA2)) - 1, &mut bytes);
-        //bytes_to_bits(&bytes, &mut w1_tilde[i * step..(i + 1) * step]);
-        w1_tilde[i * bytes.len()..(i + 1) * bytes.len()].copy_from_slice(&bytes[..]);
+        simple_bit_pack(&w1[i], qm12gm1, &mut w1_tilde[i * step..(i + 1) * step]);
+        //
     } // 4: end for
-}
+      //
+} // 5: return w^tilde_1
