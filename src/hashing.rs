@@ -170,10 +170,10 @@ pub(crate) fn rej_bounded_poly<const ETA: usize>(rhos: &[&[u8]], a: &mut R) {
 
 /// Algorithm 26 ExpandA(ρ) on page 31.
 /// Samples a k × ℓ matrix A_hat of elements of T_q.
-pub(crate) fn expand_a<const K: usize, const L: usize>(rho: &[u8; 32]) -> [[R; L]; K] {
+pub(crate) fn expand_a<const K: usize, const L: usize>(rho: &[u8; 32]) -> [[T; L]; K] {
     // Input: ρ ∈{0,1}^256.
     // Output: Matrix A_hat
-    let mut cap_a_hat = [[R::zero(); L]; K];
+    let mut cap_a_hat = [[T::zero(); L]; K];
 
     // 1: for r from 0 to k − 1 do
     for r in 0..=(K - 1) {
@@ -229,9 +229,7 @@ pub(crate) fn expand_s<const ETA: usize, const K: usize, const L: usize>(
 
 /// Algorithm 28 ExpandMask(ρ, µ) from page 32.
 /// Samples a vector s ∈ R^ℓ_q such that each polynomial s_j has coeffcients between −γ1 + 1 and γ1.
-pub(crate) fn expand_mask<const GAMMA1: usize, const L: usize>(
-    rho: &[u8; 64], mu: u32
-) -> [R; L] {
+pub(crate) fn expand_mask<const GAMMA1: usize, const L: usize>(rho: &[u8; 64], mu: u32) -> [R; L] {
     // Input: A bit string ρ ∈{0,1}^512 and a nonnegative integer µ.
     // Output: Vector s ∈ R^ℓ_q.
     let mut s = [R::zero(); L];

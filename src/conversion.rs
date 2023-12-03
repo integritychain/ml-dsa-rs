@@ -619,7 +619,7 @@ mod tests {
     fn test_bit_unpack_validation1() {
         // wrong size of bytes
         let random_bytes: Vec<u8> = (0..32 * 7).map(|_| rand::random::<u8>()).collect();
-        let mut r = bit_unpack(&random_bytes, 0, 2u32.pow(6) - 1);
+        let _r = bit_unpack(&random_bytes, 0, 2u32.pow(6) - 1);
     }
 
     #[test]

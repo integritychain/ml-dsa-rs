@@ -30,31 +30,37 @@ macro_rules! functionality {
         #[derive(Zeroize, ZeroizeOnDrop)]
         pub struct PublicKey([u8; PK_LEN]);
 
+        impl PublicKey {
+            pub fn verify(&self, message: &[u8], sig: &Signature) -> Result<bool, &'static str> {
+                ml_dsa::verify::<BETA, GAMMA1, GAMMA2, K, L, LAMBDA, OMEGA, PK_LEN, SIG_LEN, TAU>(
+                    &self.0, &message, &sig.0,
+                )
+            }
+        }
+
         /// Correctly sized public key specific to the target parameter set.
         #[derive(Zeroize, ZeroizeOnDrop)]
         pub struct Signature([u8; SIG_LEN]);
 
         impl PrivateKey {
-            fn default() -> Self { PrivateKey([0u8; SK_LEN]) }
-
-            pub fn sign(&self, rng: &mut impl CryptoRngCore, message: &[u8]) -> Signature {
-                let mut signature = Signature::default();
-                ml_dsa::sign::<BETA, ETA, GAMMA1, GAMMA2, K, L, LAMBDA, OMEGA, SK_LEN, TAU>(
-                    rng,
-                    &self.0,
-                    message,
-                    &mut signature.0,
-                );
-                signature
+            pub fn sign(
+                &self, rng: &mut impl CryptoRngCore, message: &[u8],
+            ) -> Result<Signature, &'static str> {
+                let sig = ml_dsa::sign::<
+                    BETA,
+                    ETA,
+                    GAMMA1,
+                    GAMMA2,
+                    K,
+                    L,
+                    LAMBDA,
+                    OMEGA,
+                    SIG_LEN,
+                    SK_LEN,
+                    TAU,
+                >(rng, &self.0, message)?;
+                Ok(Signature(sig))
             }
-        }
-
-        impl Default for PublicKey {
-            fn default() -> Self { PublicKey([0u8; PK_LEN]) }
-        }
-
-        impl Default for Signature {
-            fn default() -> Self { Signature([0u8; SIG_LEN]) }
         }
 
         #[must_use]
@@ -72,7 +78,7 @@ pub mod ml_dsa_44 {
     const TAU: usize = 39;
     const LAMBDA: usize = 128;
     const GAMMA1: usize = 2u32.pow(17) as usize;
-    const GAMMA2: u32 = (QU - 1) / 88;
+    const GAMMA2: usize = (QU as usize - 1) / 88;
     const K: usize = 4;
     const L: usize = 4;
     const ETA: usize = 2;
@@ -91,7 +97,7 @@ pub mod ml_dsa_65 {
     const TAU: usize = 49;
     const LAMBDA: usize = 192;
     const GAMMA1: usize = 2u32.pow(19) as usize;
-    const GAMMA2: u32 = (QU - 1) / 32;
+    const GAMMA2: usize = (QU as usize - 1) / 32;
     const K: usize = 6;
     const L: usize = 5;
     const ETA: usize = 4;
@@ -109,7 +115,7 @@ pub mod ml_dsa_87 {
     const TAU: usize = 60;
     const LAMBDA: usize = 256;
     const GAMMA1: usize = 2u32.pow(19) as usize;
-    const GAMMA2: u32 = (QU - 1) / 32;
+    const GAMMA2: usize = (QU as usize - 1) / 32;
     const K: usize = 8;
     const L: usize = 7;
     const ETA: usize = 2;
