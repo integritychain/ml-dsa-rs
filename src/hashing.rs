@@ -204,7 +204,7 @@ pub(crate) fn expand_s<const ETA: usize, const K: usize, const L: usize>(
     for r in 0..=(L - 1) {
         //
         // 2: s1[r] ← RejBoundedPoly(ρ||IntegerToBits(r, 16))
-        rej_bounded_poly::<ETA>(&[rho, &[0], &[r as u8]], &mut s1[r]);
+        rej_bounded_poly::<ETA>(&[rho, &[r as u8], &[0]], &mut s1[r]);
         //
     } // 3: end for
 
@@ -213,7 +213,7 @@ pub(crate) fn expand_s<const ETA: usize, const K: usize, const L: usize>(
         //
         // 5: s2[r] ← RejBoundedPoly(ρ||IntegerToBits(r + ℓ, 16))
         debug_assert!((r + L) < 255);
-        rej_bounded_poly::<ETA>(&[rho, &[0], &[(r + L) as u8]], &mut s2[r]);
+        rej_bounded_poly::<ETA>(&[rho, &[(r + L) as u8], &[0]], &mut s2[r]);
         //
     } // 6: end for
       //

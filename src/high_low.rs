@@ -1,6 +1,6 @@
+use crate::helpers::mod_pm;
 use crate::types::Zq;
 use crate::{D, QI, QU};
-use crate::helpers::mod_pm;
 
 
 // This file implements functionality from FIPS 204 section 8.4 High Order / Low Order Bits and Hints
@@ -13,14 +13,16 @@ pub(crate) fn power2round(r: Zq) -> (Zq, Zq) {
     // Output: Integers (r1, r0).
 
     // 1: r+ ← r mod q
-    let rp = r.rem_euclid(QU as i32); // % (QU as i32);  // TODO euclid rem
-                                      // 2: r0 ← r+ mod±2^d
-    let x1 = rp & (2i32.pow(D) - 1);
-    let r0 = if x1 < 2i32.pow(D - 1) {
-        x1
-    } else {
-        (x1 - 2i32.pow(D - 1)).rem_euclid(QI) // % QI
-    };
+    let rp = r.rem_euclid(QU as i32); // % (QU as i32);
+
+    // 2: r0 ← r+ mod±2^d
+    // let x1 = rp & (2i32.pow(D) - 1);
+    // let r0 = if x1 < 2i32.pow(D - 1) {
+    //     x1
+    // } else {
+    //     (x1 - 2i32.pow(D - 1)).rem_euclid(QI) // % QI
+    // };
+    let r0 = mod_pm(rp.try_into().unwrap(), 2_u32.pow(D));
     //
     // 3: return ((r+ − r0)/2^d, r0)
     let r1 = (rp - r0) / 2_i32.pow(D);

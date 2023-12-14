@@ -6,7 +6,7 @@ pub const fn bitlen(a: usize) -> usize { a.ilog2() as usize + 1 }
 /// modulo α.
 pub fn mod_pm(m: u32, a: u32) -> i32 {
     let t = m % a;
-    let mp = if t <= (a/2) {
+    let mp = if t <= (a / 2) {
         t as i32
     } else {
         t as i32 - a as i32

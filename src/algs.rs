@@ -32,23 +32,33 @@ pub(crate) fn ntt(w: &R) -> T {
 
     // 1: for j from 0 to 255 do
     for j in 0..=255 {
+        //
         // 2: w_hat[j] ← w_j
         w_hat[j] = w[j];
+        //
     } // 3: end for
+      //
       // 4: k ← 0
     let mut k = 0;
+    //
     // 5: len ← 128
     let mut len = 128;
+    //
     // 6: while len ≥ 1 do
     while len >= 1 {
+        //
         // 7: start ← 0
         let mut start = 0;
+        //
         // 8: while start < 256 do
         while start < 256 {
+            //
             // 9: k ← k+1
             k += 1;
+
             // 10: zeta ← ζ^{brv(k)} mod q
-            let zeta = pow_mod_q(ZETA, (k as u8).reverse_bits() >> 1) as i64;
+            let zeta = pow_mod_q(ZETA, (k as u8).reverse_bits()) as i64; // >> 1) as i64;
+
             // 11: for j from start to start + len − 1 do
             for j in start..=(start + len - 1) {
                 // 12: t ← zeta · w_hat[ j + len]

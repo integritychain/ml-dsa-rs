@@ -21,13 +21,29 @@ pub(crate) fn mat_vec_mul<const K: usize, const L: usize>(
     for i in 0..K {
         #[allow(clippy::needless_range_loop)]
         for j in 0..L {
-            let tmp = multiply_ntts(&a_hat[i][j], &u_hat[j]);
+            //let tmp = multiply_ntts(&a_hat[i][j], &u_hat[j]);
+            let mut tmp = [0i32; 256];
+            tmp.iter_mut().enumerate().for_each(|(m, e)| *e = (a_hat[i][j][m] as i64 * u_hat[j][m] as i64).rem_euclid(QI as i64) as i32);
             for k in 0..256 {
                 w_hat[i][k] = (w_hat[i][k] + tmp[k]).rem_euclid(QI);
             }
         }
     }
     w_hat
+}
+
+/// Vector addition; See bottom of page 9, second row: `z_hat` = `u_hat` + `v_hat`
+#[must_use]
+pub(crate) fn vec_add<const K: usize>(
+    vec_a: &[R; K], vec_b: &[R; K],
+) -> [R; K] {
+    let mut result = [R::zero(); K];
+    for i in 0..vec_a.len() {
+        for j in 0..vec_a[i].len() {
+            result[i][j] = (vec_a[i][j] + vec_b[i][j]).rem_euclid(QI);
+        }
+    }
+    result
 }
 
 /// Algorithm 10 `MultiplyNTTs(f, g)` on page 24 of FIPS 203.
@@ -43,12 +59,14 @@ pub fn multiply_ntts(f_hat: &T, g_hat: &T) -> T {
     for i in 0..128 {
         //
         // 2: (h_hat[2i], h_hat[2i + 1]) ← BaseCaseMultiply( f_hat[2i], f_hat[2i + 1], g_hat[2i], g_hat[2i + 1], ζ^{2BitRev7(i) + 1})
+        let xx = pow_mod_q(ZETA, (i as u8).reverse_bits() + 1);
         let (h_hat_2i, h_hat_2ip1) = base_case_multiply(
             f_hat[2 * i],
             f_hat[2 * i + 1],
             g_hat[2 * i],
             g_hat[2 * i + 1],
-            pow_mod_q(ZETA, 2 * ((i as u8).reverse_bits() >> 1) + 1),
+            //pow_mod_q(ZETA, 2 * ((i as u8).reverse_bits() >> 1) + 1),
+            xx,
         );
         h_hat[2 * i] = h_hat_2i;
         h_hat[2 * i + 1] = h_hat_2ip1;
@@ -61,15 +79,15 @@ pub fn multiply_ntts(f_hat: &T, g_hat: &T) -> T {
 /// Computes the product of two degree-one polynomials with respect to a quadratic modulus.
 #[must_use]
 pub fn base_case_multiply(a0: i32, a1: i32, b0: i32, b1: i32, gamma: i32) -> (i32, i32) {
-    let (a0, a1, b0, b1, gamma) = (a0 as i64, a1 as i64, b0 as i64, b1 as i64, gamma as i64);
+    let (a0, a1, b0, b1, gamma) = (a0 as i128, a1 as i128, b0 as i128, b1 as i128, gamma as i128);
     // Input: a0 , a1 , b0 , b1 ∈ Z_q               ▷ the coefficients of a0 + a1 X and b0 + b1 X
     // Input: γ ∈ Z_q                               ▷ the modulus is X^2 − γ
     // Output: c0 , c1 ∈ Z_q                        ▷ the coeffcients of the product of the two polynomials
     // 1: c0 ← a0 · b0 + a1 · b1 · γ                ▷ steps 1-2 done modulo q
-    let c0 = (a0 * b0 + (a1 * b1).rem_euclid(QI as i64) * gamma).rem_euclid(QI as i64);
+    let c0 = (a0 * b0 + a1 * b1 * gamma).rem_euclid(QI as i128);
 
     // 2: 2: c1 ← a0 · b1 + a1 · b0
-    let c1 = (a0 * b1 + a1 * b0).rem_euclid(QI as i64);
+    let c1 = (a0 * b1 + a1 * b0).rem_euclid(QI as i128);
 
     // 3: return c0 , c1
     (c0 as i32, c1 as i32)
@@ -110,15 +128,16 @@ pub(crate) fn key_gen<
     let (s_1, s_2): ([R; L], [R; K]) = expand_s::<ETA, K, L>(&rho_prime);
 
     // 5: t ← NTT−1 (cap_a_hat ◦ NTT(s_1)) + s_2        ▷ Compute t = As1 + s2
-    let mut ntt_s_1: [T; L] = [T::zero(); L];
+    let mut s_1_hat: [T; L] = [T::zero(); L];
     for i in 0..L {
-        ntt_s_1[i] = ntt(&s_1[i]);
+        s_1_hat[i] = ntt(&s_1[i]);
     }
-    let ntt_p1: [T; K] = mat_vec_mul(&cap_a_hat, &ntt_s_1);
+    let ntt_p1: [T; K] = mat_vec_mul(&cap_a_hat, &s_1_hat);
     let mut t: [R; K] = [R::zero(); K];
     for l in 0..K {
         t[l] = inv_ntt(&ntt_p1[l]);
     }
+    t = vec_add(&t, &s_2);
 
     // 6: (t_1 , t_0 ) ← Power2Round(t, d)              ▷ Compress t
     let mut t_1: [R; K] = [R::zero(); K];
@@ -459,7 +478,7 @@ pub(crate) fn verify<
     // 13: return [[ ||z||∞ < γ1 −β]] and [[c_tilde = c_tilde_′]] and [[number of 1’s in h is ≤ ω]]
     let left = infinity_norm(&z) < ((GAMMA1 - BETA as usize) as i32);
     let center = c_tilde == c_tilde_p;
-    let right = h  // TODO: this checks #h per each R (rather than overall total)
+    let right = h // TODO: this checks #h per each R (rather than overall total)
         .unwrap()
         .iter()
         .all(|&r| r.iter().filter(|&&e| e == 1).sum::<i32>() <= OMEGA as i32);

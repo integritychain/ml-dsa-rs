@@ -6,6 +6,7 @@ mod helpers;
 mod high_low;
 mod ml_dsa;
 mod smoke_test;
+mod test_vectors;
 mod types;
 
 // const Q: u32 = 8380417;
@@ -36,6 +37,7 @@ macro_rules! functionality {
                     &self.0, &message, &sig.0,
                 )
             }
+            pub fn to_bytes(&self) -> [u8; PK_LEN] { self.0 }
         }
 
         /// Correctly sized public key specific to the target parameter set.
@@ -61,6 +63,8 @@ macro_rules! functionality {
                 >(rng, &self.0, message)?;
                 Ok(Signature(sig))
             }
+            pub fn to_bytes(&self) -> [u8; SK_LEN] { self.0 }
+
         }
 
         #[must_use]
