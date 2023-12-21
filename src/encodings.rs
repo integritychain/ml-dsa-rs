@@ -407,18 +407,19 @@ pub(crate) fn sig_decode<
     const OMEGA: usize,
 >(
     sigma: &[u8],
-) -> Result<([u8; 32], [R; L], Option<[R; K]>), &'static str> {
+) -> Result<(Vec<u8>, [R; L], Option<[R; K]>), &'static str> {
     // Input: Signature, σ ∈ B^{λ/4+ℓ·32·(1+bitlen (γ_1-1))+ω+k
     // Output: c_tilde ∈ {0,1}^2λ, z ∈ R^ℓ_q with coefficients in [−γ_1 + 1, γ1], h ∈ R^k_2 or ⊥.
     // Note: c_tilde is hardcoded to 256bits since the remainder is 'soon' discarded
     let bl = bitlen(GAMMA1 - 1);
-    let (mut c_tilde, mut z, mut h): ([u8; 32], [R; L], Option<[R; K]>) =
-        ([0u8; 32], [R::zero(); L], None::<[R; K]>);
+    let mut c_tilde = vec![0u8; LAMBDA / 4];
+    let (mut z, mut h): ([R; L], Option<[R; K]>) = ([R::zero(); L], None::<[R; K]>);
 
     // 1: (ω, x_0, ... , x_{ℓ−1}, y) ∈ B^{λ/4} × Bℓ·32·(1+bitlen(γ_1−1))+ω+k ← σ
 
     // 2: c_tilde ← BytesToBits(w)
-    c_tilde.copy_from_slice(&sigma[0..32]); //LAMBDA / 4]);
+    let xx = c_tilde.len();
+    c_tilde.copy_from_slice(&sigma[0..xx]); //LAMBDA / 4]);
 
     // 3: for i from 0 to ℓ − 1 do
     let start = LAMBDA / 4;

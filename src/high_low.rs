@@ -37,7 +37,7 @@ pub(crate) fn decompose<const GAMMA2: usize>(r: &Zq, r1: &mut Zq, r0: &mut Zq) {
     // 1: r+ ← r mod q
     let rp = r.rem_euclid(QI);
     // 2: r0 ← r+ mod±(2γ_2)
-    *r0 = mod_pm(rp as u32, 2 * GAMMA2 as u32);
+    *r0 = mod_pm(rp as i32, 2 * GAMMA2 as u32);
     // let x1 = rp.rem_euclid(2 * GAMMA2 as i32);
     // *r0 = if x1 <= (GAMMA2) as i32 {
     //     x1
@@ -90,9 +90,9 @@ pub(crate) fn make_hint<const GAMMA2: usize>(z: Zq, r: Zq) -> bool {
     // 1: r1 ← HighBits(r)
     let r1 = high_bits::<GAMMA2>(&r);
     // 2: v1 ← HighBits(r + z)
-    let v1 = high_bits::<GAMMA2>(&(r + z));
-    // 3: return [[r1 = v1]]
-    r1 == v1
+    let v1 = high_bits::<GAMMA2>(&(r + z).rem_euclid(QI));
+    // 3: return [[r1 != v1]]
+    r1 != v1
 }
 
 

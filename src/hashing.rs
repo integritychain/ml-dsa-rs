@@ -64,7 +64,7 @@ pub(crate) fn sample_in_ball<const TAU: usize>(rho: &[u8; 32]) -> R {
         let index = i + TAU - 256;
         let bite = hpk8[index / 8];
         let shifted = bite >> (index % 8);
-        c[j as usize] = (-1i32).pow((shifted % 2 == 1) as u32);
+        c[j as usize] = (0 - 1i32).pow((shifted % 2 == 1) as u32);
 
         // 10: k ← k + 1   (implicit)
     } // 11: end for
@@ -247,7 +247,7 @@ pub(crate) fn expand_mask<const GAMMA1: usize, const L: usize>(rho: &[u8; 64], m
         let n = mu as u16 + r as u16;
 
         // 4: v ← (H(ρ||n)[[32rc]], H(ρ||n)[[32rc+1]], ... , H(ρ||n)[[32rc+32c − 1]])
-        let mut xof = h_xof(&[rho, &n.to_be_bytes()]);
+        let mut xof = h_xof(&[rho, &n.to_le_bytes()]);
         xof.read(&mut v);
 
         // 5: s[r] ← BitUnpack(v, γ1 − 1, γ1)

@@ -37,12 +37,20 @@ macro_rules! functionality {
                     &self.0, &message, &sig.0,
                 )
             }
+
             pub fn to_bytes(&self) -> [u8; PK_LEN] { self.0 }
+
+            pub fn from_bytes(pk: &[u8; PK_LEN]) -> Self { PublicKey(*pk) }
         }
 
         /// Correctly sized public key specific to the target parameter set.
         #[derive(Zeroize, ZeroizeOnDrop)]
         pub struct Signature([u8; SIG_LEN]);
+        impl Signature {
+            pub fn to_bytes(&self) -> [u8; SIG_LEN] { self.0 }
+
+            pub fn from_bytes(sig: &[u8; SIG_LEN]) -> Self { Signature(*sig) }
+        }
 
         impl PrivateKey {
             pub fn sign(
@@ -63,8 +71,10 @@ macro_rules! functionality {
                 >(rng, &self.0, message)?;
                 Ok(Signature(sig))
             }
+
             pub fn to_bytes(&self) -> [u8; SK_LEN] { self.0 }
 
+            pub fn from_bytes(sk: &[u8; SK_LEN]) -> Self { PrivateKey(*sk) }
         }
 
         #[must_use]

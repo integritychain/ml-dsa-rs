@@ -9,6 +9,7 @@ use crate::types::{Zero, R, T};
 use crate::{D, QI, QU, ZETA};
 use rand_core::CryptoRngCore;
 use sha3::digest::XofReader;
+use std::ops::Rem;
 
 
 /// Matrix by vector multiplication; See top of page 10, first row: `w_hat` = `A_hat` mul `u_hat`
@@ -23,7 +24,9 @@ pub(crate) fn mat_vec_mul<const K: usize, const L: usize>(
         for j in 0..L {
             //let tmp = multiply_ntts(&a_hat[i][j], &u_hat[j]);
             let mut tmp = [0i32; 256];
-            tmp.iter_mut().enumerate().for_each(|(m, e)| *e = (a_hat[i][j][m] as i64 * u_hat[j][m] as i64).rem_euclid(QI as i64) as i32);
+            tmp.iter_mut().enumerate().for_each(|(m, e)| {
+                *e = (a_hat[i][j][m] as i64 * u_hat[j][m] as i64).rem_euclid(QI as i64) as i32
+            });
             for k in 0..256 {
                 w_hat[i][k] = (w_hat[i][k] + tmp[k]).rem_euclid(QI);
             }
@@ -34,9 +37,7 @@ pub(crate) fn mat_vec_mul<const K: usize, const L: usize>(
 
 /// Vector addition; See bottom of page 9, second row: `z_hat` = `u_hat` + `v_hat`
 #[must_use]
-pub(crate) fn vec_add<const K: usize>(
-    vec_a: &[R; K], vec_b: &[R; K],
-) -> [R; K] {
+pub(crate) fn vec_add<const K: usize>(vec_a: &[R; K], vec_b: &[R; K]) -> [R; K] {
     let mut result = [R::zero(); K];
     for i in 0..vec_a.len() {
         for j in 0..vec_a[i].len() {
@@ -258,8 +259,8 @@ pub(crate) fn sign<
 
         // 15: c_tilde ∈ {0,1}^{2Lambda} ← H(µ || w1Encode(w_1), 2Lambda)     ▷ Commitment hash
         let w1e_len = 32 * K * bitlen(((QU - 1) / (2 * GAMMA2 as u32) - 1) as usize);
-        assert_eq!(w1e_len, 768);
-        let mut w1_tilde = [0u8; 768];
+        //assert_eq!(w1e_len, 768);
+        let mut w1_tilde = [0u8; 1024];
         w1_encode::<K, GAMMA2>(&w_1, &mut w1_tilde[0..w1e_len]);
         let mut h99 = h_xof(&[&mu, &w1_tilde[0..w1e_len]]);
         h99.read(&mut c_tilde); // Ok, to read a bit too much
@@ -317,9 +318,9 @@ pub(crate) fn sign<
         }
 
         // 23: if ||z||∞ ≥ Gamma1 − β or ||r0||∞ ≥ Gamma2 − β then (z, h) ← ⊥    ▷ Validity checks
-        if (infinity_norm(&z.unwrap()) >= (GAMMA1 as i32 - BETA as i32))
-            | (infinity_norm(&r0) >= (GAMMA2 as i32 - BETA as i32))
-        {
+        let z_norm = infinity_norm(&z.unwrap());
+        let r0_norm = infinity_norm(&r0);
+        if (z_norm >= (GAMMA1 as i32 - BETA as i32)) | (r0_norm >= (GAMMA2 as i32 - BETA as i32)) {
             //assert_eq!(infinity_norm(&z.unwrap()), GAMMA1 as i32 - BETA as i32);
             //assert_eq!(infinity_norm(&r0), GAMMA2 as i32 - BETA as i32);
             (z, h) = (None, None);
@@ -341,12 +342,14 @@ pub(crate) fn sign<
             }
 
             // 26: h ← MakeHint(−⟨⟨c_t_0⟩⟩, w − ⟨⟨c_s_2⟩⟩ + ⟨⟨c_t_0⟩⟩)    ▷ Signer’s hint
+            let mut mct0 = [R::zero(); K];
+            let mut wcc = [R::zero(); K];
             let mut hh: [R; K] = [R::zero(); K]; // hh should be R_2
             for i in 0..K {
                 for j in 0..256 {
-                    hh[i][j] =
-                        make_hint::<GAMMA2>(-1 * c_t_0[i][j], w[i][j] - c_s_2[i][j] + c_t_0[i][j])
-                            as i32;
+                    mct0[i][j] = (QI - c_t_0[i][j]).rem_euclid(QI);
+                    wcc[i][j] = (w[i][j] - c_s_2[i][j] + c_t_0[i][j]).rem_euclid(QI);
+                    hh[i][j] = make_hint::<GAMMA2>(mct0[i][j], wcc[i][j]) as i32;
                 }
             }
             h = Some(hh);
@@ -375,7 +378,7 @@ pub(crate) fn sign<
     let zz = z.unwrap();
     for i in 0..L {
         for j in 0..256 {
-            zmq[i][j] = mod_pm(zz[i][j] as u32, QU);
+            zmq[i][j] = mod_pm(zz[i][j] as i32, QU);
         }
     }
 
@@ -413,13 +416,15 @@ pub(crate) fn verify<
     let (rho, mut t_1): ([u8; 32], [R; K]) = pk_decode::<K, PK_LEN>(pk)?;
 
     // 2: (c_tilde, z, h) ← sigDecode(σ)    ▷ Signer’s commitment hash c_tilde, response z and hint h
-    let (c_tilde, z, h): ([u8; 32], [R; L], Option<[R; K]>) =
+    let (c_tilde, z, h): (Vec<u8>, [R; L], Option<[R; K]>) =
         sig_decode::<GAMMA1, K, L, LAMBDA, OMEGA>(sig)?;
 
     // 3: if h = ⊥ then return false ▷ Hint was not properly encoded
     if h.is_none() {
         return Ok(false);
     };
+    let i_norm = infinity_norm(&z);
+    assert!(i_norm < GAMMA1 as i32);
     // 4: end if
 
     // 5: cap_a_hat ← ExpandA(ρ)    ▷ A is generated and stored in NTT representation as cap_A_hat
@@ -436,10 +441,10 @@ pub(crate) fn verify<
     hasher.read(&mut mu);
 
     // 8: (c_tilde_1, c_tilde_2) ∈ {0,1}^256 × {0,1}^{2λ-256} ← c_tilde   NOTE: c_tilde_2 is discarded
-    let c_tilde_1: [u8; 32] = c_tilde; // c_tilde_2 is just discarded...
+    let c_tilde_1 = c_tilde.clone(); // c_tilde_2 is just discarded...
 
     // 9: c ← SampleInBall(c_tilde_1)    ▷ Compute verifier’s challenge from c_tilde
-    let c: R = sample_in_ball::<TAU>(&c_tilde_1);
+    let c: R = sample_in_ball::<TAU>(&c_tilde_1[0..32].try_into().unwrap());
 
     // 10: w′_Approx ← invNTT(cap_A_hat ◦ NTT(z) - NTT(c) ◦ NTT(t_1 · 2^d)    ▷ w′_Approx = Az − ct1·2^d
     let mut ntt_z: [T; L] = [T::zero(); L];
@@ -447,12 +452,26 @@ pub(crate) fn verify<
         ntt_z[i] = ntt(&z[i]);
     }
     let ntt_az: [T; K] = mat_vec_mul(&cap_a_hat, &ntt_z);
+
+    let mut ntt_t1: [T; K] = [T::zero(); K];
+    for i in 0..K {
+        ntt_t1[i] = ntt(&t_1[i]);
+    }
+    let mut ntt_t1_d2: [T; K] = [T::zero(); K];
+    for i in 0..K {
+        for j in 0..256 {
+            ntt_t1_d2[i][j] =
+                (ntt_t1[i][j] as i64 * 2i32.pow(D) as i64).rem_euclid(QI as i64) as i32;
+        }
+    }
     let ntt_c: T = ntt(&c);
     let mut ntt_ct: [T; K] = [T::zero(); K];
     for i in 0..K {
-        t_1[i].iter_mut().for_each(|e| *e = *e * 2i32.pow(D));
-        ntt_ct[i] = multiply_ntts(&ntt(&t_1[i]), &c);
+        for j in 0..256 {
+            ntt_ct[i][j] = (ntt_c[j] as i64 * ntt_t1_d2[i][j] as i64).rem_euclid(QI as i64) as i32;
+        }
     }
+
     let mut wp_approx: [R; K] = [R::zero(); K];
     for i in 0..K {
         let mut tmp = T::zero();
@@ -469,10 +488,13 @@ pub(crate) fn verify<
     }
 
     // 12: c_tilde_′ ← H(µ||w1Encode(w′_1), 2λ)     ▷ Hash it; this should match c_tilde
-    let mut tmp = vec![0u8; 2 * LAMBDA / 8];
+    //let mut tmp = vec![0u8; 32 * K * 4];  // TODO this size cannot be correct/generic
+    let qm12gm1 = (QU - 1) / (2 * GAMMA2 as u32) - 1;
+    let bl = bitlen(qm12gm1 as usize);
+    let mut tmp = vec![0u8; 32 * K * bl];
     w1_encode::<K, GAMMA2>(&wp_1, &mut tmp[..]);
     let mut hasher = h_xof(&[&mu, &tmp[..]]);
-    let mut c_tilde_p = [0u8; 32];
+    let mut c_tilde_p = vec![0u8; 2 * LAMBDA / 8];
     hasher.read(&mut c_tilde_p);
 
     // 13: return [[ ||z||∞ < γ1 −β]] and [[c_tilde = c_tilde_′]] and [[number of 1’s in h is ≤ ω]]
@@ -491,11 +513,8 @@ fn infinity_norm<const ROW: usize, const COL: usize>(w: &[[i32; COL]; ROW]) -> i
     for i in 0..w.len() {
         let inner = w[i];
         for j in 0..inner.len() {
-            result = if inner[j].abs() > result {
-                inner[j].abs()
-            } else {
-                result
-            };
+            let z_q = mod_pm(inner[j], QU).abs();
+            result = if z_q > result { z_q } else { result };
         }
     }
     result
