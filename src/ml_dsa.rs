@@ -1,4 +1,4 @@
-use crate::algs::{inv_ntt, ntt, pow_mod_q};
+use crate::algs::{inv_ntt, ntt};
 use crate::encodings::{
     pk_decode, pk_encode, sig_decode, sig_encode, sk_decode, sk_encode, w1_encode,
 };
@@ -6,10 +6,9 @@ use crate::hashing::{expand_a, expand_mask, expand_s, h_xof, sample_in_ball};
 use crate::helpers::{bitlen, mod_pm};
 use crate::high_low::{high_bits, low_bits, make_hint, power2round, use_hint};
 use crate::types::{Zero, R, T};
-use crate::{D, QI, QU, ZETA};
+use crate::{D, QI, QU};
 use rand_core::CryptoRngCore;
 use sha3::digest::XofReader;
-use std::ops::Rem;
 
 
 /// Matrix by vector multiplication; See top of page 10, first row: `w_hat` = `A_hat` mul `u_hat`
@@ -25,7 +24,7 @@ pub(crate) fn mat_vec_mul<const K: usize, const L: usize>(
             //let tmp = multiply_ntts(&a_hat[i][j], &u_hat[j]);
             let mut tmp = [0i32; 256];
             tmp.iter_mut().enumerate().for_each(|(m, e)| {
-                *e = (a_hat[i][j][m] as i64 * u_hat[j][m] as i64).rem_euclid(QI as i64) as i32
+                *e = (a_hat[i][j][m] as i64 * u_hat[j][m] as i64).rem_euclid(QI as i64) as i32;
             });
             for k in 0..256 {
                 w_hat[i][k] = (w_hat[i][k] + tmp[k]).rem_euclid(QI);
@@ -49,51 +48,50 @@ pub(crate) fn vec_add<const K: usize>(vec_a: &[R; K], vec_b: &[R; K]) -> [R; K] 
 
 /// Algorithm 10 `MultiplyNTTs(f, g)` on page 24 of FIPS 203.
 /// Computes the product (in the ring Tq ) of two NTT representations.
-#[must_use]
-#[allow(clippy::cast_possible_truncation)]
-pub fn multiply_ntts(f_hat: &T, g_hat: &T) -> T {
-    // Input: Two arrays f_hat ∈ Z^{256}_q and g_hat ∈ Z^{256}_q        ▷ the coeffcients of two NTT representations
-    // Output: An array h_hat ∈ Z^{256}_q                               ▷ the coeffcients of the product of the inputs
-    let mut h_hat: T = T::zero();
-
-    // for (i ← 0; i < 128; i ++)
-    for i in 0..128 {
-        //
-        // 2: (h_hat[2i], h_hat[2i + 1]) ← BaseCaseMultiply( f_hat[2i], f_hat[2i + 1], g_hat[2i], g_hat[2i + 1], ζ^{2BitRev7(i) + 1})
-        let xx = pow_mod_q(ZETA, (i as u8).reverse_bits() + 1);
-        let (h_hat_2i, h_hat_2ip1) = base_case_multiply(
-            f_hat[2 * i],
-            f_hat[2 * i + 1],
-            g_hat[2 * i],
-            g_hat[2 * i + 1],
-            //pow_mod_q(ZETA, 2 * ((i as u8).reverse_bits() >> 1) + 1),
-            xx,
-        );
-        h_hat[2 * i] = h_hat_2i;
-        h_hat[2 * i + 1] = h_hat_2ip1;
-    } // 3: end for
-
-    h_hat // 4: return h_hat
-}
+// #[must_use]
+// #[allow(clippy::cast_possible_truncation)]
+// pub fn multiply_ntts(f_hat: &T, g_hat: &T) -> T {
+//     // Input: Two arrays f_hat ∈ Z^{256}_q and g_hat ∈ Z^{256}_q        ▷ the coeffcients of two NTT representations
+//     // Output: An array h_hat ∈ Z^{256}_q                               ▷ the coeffcients of the product of the inputs
+//     let mut h_hat: T = T::zero();
+//
+//     // for (i ← 0; i < 128; i ++)
+//     for i in 0..128 {
+//         //
+//         // 2: (h_hat[2i], h_hat[2i + 1]) ← BaseCaseMultiply( f_hat[2i], f_hat[2i + 1], g_hat[2i], g_hat[2i + 1], ζ^{2BitRev7(i) + 1})
+//         let xx = pow_mod_q(ZETA, (i as u8).reverse_bits() + 1);
+//         let (h_hat_2i, h_hat_2ip1) = base_case_multiply(
+//             f_hat[2 * i],
+//             f_hat[2 * i + 1],
+//             g_hat[2 * i],
+//             g_hat[2 * i + 1],
+//             //pow_mod_q(ZETA, 2 * ((i as u8).reverse_bits() >> 1) + 1),
+//             xx,
+//         );
+//         h_hat[2 * i] = h_hat_2i;
+//         h_hat[2 * i + 1] = h_hat_2ip1;
+//     } // 3: end for
+//
+//     h_hat // 4: return h_hat
+// }
 
 /// Algorithm 11 `BaseCaseMultiply(a0, a1, b0, b1, gamma)` on page 24 of FIPS 203.
 /// Computes the product of two degree-one polynomials with respect to a quadratic modulus.
-#[must_use]
-pub fn base_case_multiply(a0: i32, a1: i32, b0: i32, b1: i32, gamma: i32) -> (i32, i32) {
-    let (a0, a1, b0, b1, gamma) = (a0 as i128, a1 as i128, b0 as i128, b1 as i128, gamma as i128);
-    // Input: a0 , a1 , b0 , b1 ∈ Z_q               ▷ the coefficients of a0 + a1 X and b0 + b1 X
-    // Input: γ ∈ Z_q                               ▷ the modulus is X^2 − γ
-    // Output: c0 , c1 ∈ Z_q                        ▷ the coeffcients of the product of the two polynomials
-    // 1: c0 ← a0 · b0 + a1 · b1 · γ                ▷ steps 1-2 done modulo q
-    let c0 = (a0 * b0 + a1 * b1 * gamma).rem_euclid(QI as i128);
-
-    // 2: 2: c1 ← a0 · b1 + a1 · b0
-    let c1 = (a0 * b1 + a1 * b0).rem_euclid(QI as i128);
-
-    // 3: return c0 , c1
-    (c0 as i32, c1 as i32)
-}
-
+// #[must_use]
+// pub fn base_case_multiply(a0: i32, a1: i32, b0: i32, b1: i32, gamma: i32) -> (i32, i32) {
+//     let (a0, a1, b0, b1, gamma) = (a0 as i128, a1 as i128, b0 as i128, b1 as i128, gamma as i128);
+//     // Input: a0 , a1 , b0 , b1 ∈ Z_q               ▷ the coefficients of a0 + a1 X and b0 + b1 X
+//     // Input: γ ∈ Z_q                               ▷ the modulus is X^2 − γ
+//     // Output: c0 , c1 ∈ Z_q                        ▷ the coeffcients of the product of the two polynomials
+//     // 1: c0 ← a0 · b0 + a1 · b1 · γ                ▷ steps 1-2 done modulo q
+//     let c0 = (a0 * b0 + a1 * b1 * gamma).rem_euclid(QI as i128);
+//
+//     // 2: 2: c1 ← a0 · b1 + a1 · b0
+//     let c1 = (a0 * b1 + a1 * b0).rem_euclid(QI as i128);
+//
+//     // 3: return c0 , c1
+//     (c0 as i32, c1 as i32)
+// }
 
 /// Algorithm 1 ML-DSA.KeyGen() on page 15.
 /// Generates a public-private key pair.
@@ -105,13 +103,14 @@ pub(crate) fn key_gen<
     const SK_LEN: usize,
 >(
     rng: &mut impl CryptoRngCore,
-) -> ([u8; PK_LEN], [u8; SK_LEN]) {
+) -> Result<([u8; PK_LEN], [u8; SK_LEN]), &'static str> {
     // Output: Public key, pk ∈ B^{32+32k(bitlen(q−1)−d)},
     // and private key, sk ∈ B^{32+32+64+32·((ℓ+k)·bitlen(2η)+dk)}
 
     // 1: ξ ← {0,1}^{256}    ▷ Choose random seed
     let mut xi = [0u8; 32];
-    rng.fill_bytes(&mut xi);
+    rng.try_fill_bytes(&mut xi)
+        .map_err(|_| "Random number generator failed")?;
 
     // 2: (ρ, ρ′, K) ∈ {0,1}^{256} × {0,1}^{512} × {0,1}^{256} ← H(ξ, 1024)    ▷ Expand seed
     let mut h = h_xof(&[&xi]);
@@ -162,12 +161,15 @@ pub(crate) fn key_gen<
         sk_encode::<{ D as usize }, ETA, K, L, SK_LEN>(&rho, &cap_k, &tr, &s_1, &s_2, &t_0);
 
     // 10: return (pk, sk)
-    (pk, sk)
+    Ok((pk, sk))
 }
 
 
 /// Algorithm 2 ML-DSA.Sign(sk, M) on page 17
 /// Generates a signature for a message M.
+#[allow(clippy::similar_names)]
+#[allow(clippy::many_single_char_names)]
+#[allow(clippy::too_many_lines)]
 pub(crate) fn sign<
     const BETA: u32,
     const ETA: usize,
@@ -181,13 +183,14 @@ pub(crate) fn sign<
     const SK_LEN: usize,
     const TAU: usize,
 >(
-    rng: &mut impl CryptoRngCore, sk: &[u8; SK_LEN], message: &[u8],
+    rand_gen: &mut impl CryptoRngCore, sk: &[u8; SK_LEN], message: &[u8],
 ) -> Result<[u8; SIG_LEN], &'static str> {
     // Input: Private key, sk ∈ B^{32+32+64+32·((ℓ+k)·bitlen(2η)+dk)} and the message M ∈ {0,1}^∗
     // Output: Signature, σ ∈ B^{32+ℓ·32·(1+bitlen(gamma_1 −1))+ω+k}
     //let mut sig = [0u8; SIG_LEN];
 
     // 1:  (ρ, K, tr, s_1 , s_2 , t_0 ) ← skDecode(sk)
+    #[allow(clippy::type_complexity)]
     let (rho, cap_k, tr, s_1, s_2, t_0): ([u8; 32], [u8; 32], [u8; 64], [R; L], [R; K], [R; K]) =
         sk_decode::<{ D as usize }, ETA, K, L, SK_LEN>(sk)?;
 
@@ -219,7 +222,7 @@ pub(crate) fn sign<
 
     // 7:  rnd ← {0,1}^256    ▷ For the optional deterministic variant, substitute rnd ← {0}256
     let mut rnd = [0u8; 32];
-    rng.fill_bytes(&mut rnd);
+    rand_gen.fill_bytes(&mut rnd);
 
     // 8:  ρ′ ← H(K||rnd||µ, 512)    ▷ Compute private random seed
     let mut h = h_xof(&[&cap_k, &rnd, &mu]);
@@ -253,7 +256,7 @@ pub(crate) fn sign<
         let mut w_1: [R; K] = [R::zero(); K];
         for i in 0..K {
             for j in 0..256 {
-                w_1[i][j] = high_bits::<GAMMA2>(&w[i][j]);
+                w_1[i][j] = high_bits::<GAMMA2>(w[i][j]);
             }
         }
 
@@ -279,6 +282,7 @@ pub(crate) fn sign<
         // 19: ⟨⟨c_s_1 ⟩⟩ ← NTT−1 (c_hat ◦ s_hat_1)
         let mut x: [T; L] = [T::zero(); L];
         for i in 0..L {
+            #[allow(clippy::needless_range_loop)]
             for j in 0..256 {
                 x[i][j] = (c_hat[j] as i64 * s_hat_1[i][j] as i64).rem_euclid(QI as i64) as i32;
             }
@@ -291,6 +295,7 @@ pub(crate) fn sign<
         // 20: ⟨⟨c_s_2 ⟩⟩ ← NTT−1 (c_hat ◦ s_hat_2)
         let mut x: [T; K] = [T::zero(); K];
         for i in 0..K {
+            #[allow(clippy::needless_range_loop)]
             for j in 0..256 {
                 x[i][j] = (c_hat[j] as i64 * s_hat_2[i][j] as i64).rem_euclid(QI as i64) as i32;
             }
@@ -332,6 +337,7 @@ pub(crate) fn sign<
             // 25: ⟨⟨c_t_0 ⟩⟩ ← NTT−1 (c_hat ◦ t_hat_0)
             let mut x: [T; K] = [T::zero(); K];
             for i in 0..K {
+                #[allow(clippy::needless_range_loop)]
                 for j in 0..256 {
                     x[i][j] = (c_hat[j] as i64 * t_hat_0[i][j] as i64).rem_euclid(QI as i64) as i32;
                 }
@@ -378,7 +384,7 @@ pub(crate) fn sign<
     let zz = z.unwrap();
     for i in 0..L {
         for j in 0..256 {
-            zmq[i][j] = mod_pm(zz[i][j] as i32, QU);
+            zmq[i][j] = mod_pm(zz[i][j], QU);
         }
     }
 
@@ -413,7 +419,7 @@ pub(crate) fn verify<
     // Output: Boolean
 
     // 1: (ρ,t_1) ← pkDecode(pk)
-    let (rho, mut t_1): ([u8; 32], [R; K]) = pk_decode::<K, PK_LEN>(pk)?;
+    let (rho, t_1): ([u8; 32], [R; K]) = pk_decode::<K, PK_LEN>(pk)?;
 
     // 2: (c_tilde, z, h) ← sigDecode(σ)    ▷ Signer’s commitment hash c_tilde, response z and hint h
     let (c_tilde, z, h): (Vec<u8>, [R; L], Option<[R; K]>) =
@@ -451,7 +457,7 @@ pub(crate) fn verify<
     for i in 0..L {
         ntt_z[i] = ntt(&z[i]);
     }
-    let ntt_az: [T; K] = mat_vec_mul(&cap_a_hat, &ntt_z);
+    let ntt_a_z: [T; K] = mat_vec_mul(&cap_a_hat, &ntt_z);
 
     let mut ntt_t1: [T; K] = [T::zero(); K];
     for i in 0..K {
@@ -467,6 +473,7 @@ pub(crate) fn verify<
     let ntt_c: T = ntt(&c);
     let mut ntt_ct: [T; K] = [T::zero(); K];
     for i in 0..K {
+        #[allow(clippy::needless_range_loop)]
         for j in 0..256 {
             ntt_ct[i][j] = (ntt_c[j] as i64 * ntt_t1_d2[i][j] as i64).rem_euclid(QI as i64) as i32;
         }
@@ -475,7 +482,7 @@ pub(crate) fn verify<
     let mut wp_approx: [R; K] = [R::zero(); K];
     for i in 0..K {
         let mut tmp = T::zero();
-        (0..256).for_each(|j| tmp[j] = ntt_az[i][j] - ntt_ct[i][j]);
+        (0..256).for_each(|j| tmp[j] = ntt_a_z[i][j] - ntt_ct[i][j]);
         wp_approx[i] = inv_ntt(&tmp);
     }
 
@@ -510,8 +517,10 @@ pub(crate) fn verify<
 
 fn infinity_norm<const ROW: usize, const COL: usize>(w: &[[i32; COL]; ROW]) -> i32 {
     let mut result = 0;
+    #[allow(clippy::needless_range_loop)]
     for i in 0..w.len() {
         let inner = w[i];
+        #[allow(clippy::needless_range_loop)]
         for j in 0..inner.len() {
             let z_q = mod_pm(inner[j], QU).abs();
             result = if z_q > result { z_q } else { result };

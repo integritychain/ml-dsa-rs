@@ -17,7 +17,8 @@ pub(crate) fn integer_to_bits(x: i32, alpha: usize, y_bits: &mut [bool]) {
     let mut xx = x as u32;
 
     // 1: for i from 0 to alpha − 1 do
-    for i in 0..=(alpha - 1) {
+    #[allow(clippy::needless_range_loop)]
+    for i in 0..alpha {
         //
         // 2: y[i] ← x mod 2
         y_bits[i] = (xx % 2) == 1;
@@ -67,7 +68,7 @@ pub(crate) fn bits_to_bytes(y_bits: &[bool], z_bytes: &mut [u8]) {
     z_bytes.iter_mut().for_each(|b| *b = 0);
 
     // 2: for i from 0 to c − 1 do
-    for i in 0..=(c - 1) {
+    for i in 0..c {
         //
         //3: z[⌊i/8⌋] ← z[⌊i/8⌋] + y[i] · 2^{i mod 8}
         z_bytes[i / 8] += y_bits[i] as u8 * 2u8.pow((i % 8) as u32);
@@ -87,11 +88,11 @@ pub(crate) fn bytes_to_bits(z_bytes: &[u8], y_bits: &mut [bool]) {
     let d = z_bytes.len();
 
     // 1: for i from 0 to d − 1 do
-    for i in 0..=(d - 1) {
+    for i in 0..d {
         //
         // 2: for j from 0 to 7 do
         let mut z_i = z_bytes[i];
-        for j in 0..=7 {
+        for j in 0..8 {
             //
             // 3: y[8i + j] ← z[i] mod 2
             y_bits[8 * i + j] = (z_i % 2) == 1;
@@ -106,7 +107,7 @@ pub(crate) fn bytes_to_bits(z_bytes: &[u8], y_bits: &mut [bool]) {
 
 /// Algorithm 8 CoefFromThreeBytes(b0, b1, b2) on page 21.
 /// Generates an element of {0, 1, 2, . . . , q − 1} ∪ {⊥}.
-pub(crate) fn coef_from_three_bytes(bbb: &[u8; 3]) -> Option<i32> {
+pub(crate) fn coef_from_three_bytes(bbb: [u8; 3]) -> Option<i32> {
     // Input: Bytes b0, b1, b2.
     // Output: An integer modulo q or ⊥.
 
@@ -119,12 +120,12 @@ pub(crate) fn coef_from_three_bytes(bbb: &[u8; 3]) -> Option<i32> {
     let z = 2i32.pow(16) * bbb2 + 2i32.pow(8) * (bbb[1] as i32) + (bbb[0] as i32);
 
     // 5: if z < q then return z
-    return if z < QI {
+    if z < QI {
         Some(z)
     } else {
         // 6: else return ⊥
         None
-    }; // 7: end if
+    } // 7: end if
 }
 
 
@@ -134,21 +135,22 @@ pub(crate) fn coef_from_half_byte<const ETA: usize>(b: u8) -> Option<i32> {
     // Input: Integer b ∈{0, 1, ... , 15}.
     // Output: An integer between −η and η, or ⊥.
     debug_assert!(b <= 15);
+    #[allow(clippy::redundant_else)]
 
     // 1: if η = 2 and b < 15 then return 2 − (b mod 5)
     if (ETA == 2) & (b < 15) {
-        return Some(2 - (b % 5) as i32);
+        Some(2 - (b % 5) as i32)
         //
     } else {
         // 2: else
         //
         // 3: if η = 4 and b < 9 then return 4 − b
         if (ETA == 4) & (b < 9) {
-            return Some(4 - b as i32);
+            Some(4 - b as i32)
             //
         } else {
             // 4: else return ⊥
-            return None;
+            None
             //
         } // 5: end if
     } // 6: end if
@@ -169,7 +171,7 @@ pub(crate) fn simple_bit_pack(w: &R, b: u32, bytes_out: &mut [u8]) {
     let mut z = vec![false; 256 * bitlen];
 
     // 2: for i from 0 to 255 do
-    for i in 0..=255 {
+    for i in 0..256 {
         //
         // 3: z ← z||IntegerToBits(wi, bitlen b)
         integer_to_bits(w[i], bitlen, &mut z[i * bitlen..(i + 1) * bitlen]);
@@ -200,7 +202,7 @@ pub(crate) fn bit_pack(w: &R, a: u32, b: u32, bytes_out: &mut [u8]) {
     let mut z = vec![false; w.len() * bitlen];
 
     // 2: for i from 0 to 255 do
-    for i in 0..=255 {
+    for i in 0..256 {
         //
         // 3: z ← z||IntegerToBits(b − wi, bitlen (a + b))
         integer_to_bits(b as i32 - w[i], bitlen, &mut z[i * bitlen..(i + 1) * bitlen]);
@@ -213,6 +215,7 @@ pub(crate) fn bit_pack(w: &R, a: u32, b: u32, bytes_out: &mut [u8]) {
     let mut bytes_tst = vec![0u8; bytes_out.len()];
     bit_pack2(w, a, b, &mut bytes_tst);
     assert_eq!(bytes_out, bytes_tst);
+    bytes_out.copy_from_slice(&bytes_tst);
 }
 
 
@@ -227,14 +230,14 @@ pub(crate) fn bit_pack2(w: &R, a: u32, b: u32, bytes_out: &mut [u8]) {
     let mut bit_index = 0;
     for e in w {
         if a > 0 {
-            temp = temp | (((b as i64 - *e as i64) as u64) << bit_index);
+            temp |= ((b as i64 - *e as i64) as u64) << bit_index;
         } else {
-            temp = temp | ((*e as u64) << bit_index);
+            temp |= (*e as u64) << bit_index;
         }
         bit_index += bitlen;
         while bit_index > 7 {
             bytes_out[byte_index] = temp as u8;
-            temp = temp >> 8;
+            temp >>= 8;
             byte_index += 1;
             bit_index -= 8;
         }
@@ -243,7 +246,7 @@ pub(crate) fn bit_pack2(w: &R, a: u32, b: u32, bytes_out: &mut [u8]) {
 
 
 /// Algorithm 12 SimpleBitUnpack(v, b) on page 23.
-/// Reverses the procedure SimpleBitPack.
+/// Reverses the procedure `SimpleBitPack`.
 /// This function has been optimized, but remains under test alongside the original logic.
 pub(crate) fn simple_bit_unpack(v: &[u8], b: u32) -> Result<R, &'static str> {
     // Input: b ∈ N and a byte string v of length 32 · bitlen b.
@@ -261,7 +264,7 @@ pub(crate) fn simple_bit_unpack(v: &[u8], b: u32) -> Result<R, &'static str> {
     bytes_to_bits(v, &mut z);
 
     // 3: for i from 0 to 255 do
-    for i in 0..=255 {
+    for i in 0..256 {
         //
         // 4: wi ← BitsToInteger((z[ic], z[ic + 1], . . . z[ic + c − 1]), c)
         w_out[i] = bits_to_integer(&z[i * c..(i + 1) * c]);
@@ -269,26 +272,27 @@ pub(crate) fn simple_bit_unpack(v: &[u8], b: u32) -> Result<R, &'static str> {
     } // 5: end for
     debug_assert!(w_out
         .iter()
-        .all(|e| ((*e >= 0) & (*e <= 2i32.pow(c as u32) - 1)))); // Correct range
+        .all(|e| ((*e >= 0) & (*e < 2i32.pow(c as u32))))); // Correct range
 
     // Test...
     let mut w_tst = [0i32; 256];
     bit_unpack2(v, 0, b, &mut w_tst);
     assert_eq!(w_out, w_tst);
-
+    let w_out = w_tst;
     if w_out // 6: return w
         .iter()
-        .all(|e| (*e >= 0) & (*e <= 2i32.pow(bitlen as u32) - 1))
+        .all(|e| (*e >= 0) & (*e < 2i32.pow(bitlen as u32)))
     {
-        return Ok(w_out);
+        Ok(w_out)
     } else {
-        return Err("Invalid simple_bit_unpack deserialization");
+        Err("Invalid simple_bit_unpack deserialization")
     }
 }
 
 
 /// Algorithm 13 BitUnpack(v, a, b) on page 23.
-/// Reverses the procedure BitPack.
+/// Reverses the procedure `BitPack`.
+#[allow(clippy::many_single_char_names)]
 pub(crate) fn bit_unpack(v: &[u8], a: u32, b: u32) -> Result<R, &'static str> {
     // Input: a, b ∈ N and a byte string v of length 32 · bitlen (a + b).
     // Output: A polynomial w ∈ R, with coeffcients in [b − 2^c + 1, b], where c = bitlen (a + b).
@@ -302,10 +306,10 @@ pub(crate) fn bit_unpack(v: &[u8], a: u32, b: u32) -> Result<R, &'static str> {
 
     // 2: z ← BytesToBits(v)
     let mut z = vec![false; v.len() * 8];
-    bytes_to_bits(&v, &mut z);
+    bytes_to_bits(v, &mut z);
 
     // 3: for i from 0 to 255 do
-    for i in 0..=255 {
+    for i in 0..256 {
         //
         // 4: wi ← b − BitsToInteger((z[ic], z[ic + 1], . . . z[ic + c − 1]), c)
         w_out[i] = b as i32 - bits_to_integer(&z[i * c..c * (i + 1)]);
@@ -322,9 +326,9 @@ pub(crate) fn bit_unpack(v: &[u8], a: u32, b: u32) -> Result<R, &'static str> {
         .iter()
         .all(|e| ((*e >= -(a as i32)) & (*e <= b as i32)))
     {
-        return Ok(w_out);
+        Ok(w_out)
     } else {
-        return Err("Invalid bit_unpack deserialization");
+        Err("Invalid bit_unpack deserialization")
     }
 } // 6: return w
 
@@ -337,19 +341,18 @@ pub(crate) fn bit_unpack2(v: &[u8], a: u32, b: u32, w_out: &mut R) {
     let mut temp = 0u64;
     let mut r_index = 0;
     let mut bit_index = 0;
-    for byte in v.iter() {
-        temp = temp | (*byte as u64) << bit_index;
+    for byte in v {
+        temp |= (*byte as u64) << bit_index;
         bit_index += 8;
         while bit_index >= bitlen {
             let tmask = temp & (2u64.pow(bitlen as u32) - 1);
-            //let tmask = tmask as u32 % (a + b);
-            w_out[r_index] = if a != 0 {
-                b as i32 - tmask as i32
-            } else {
+            w_out[r_index] = if a == 0 {
                 tmask as i32
+            } else {
+                b as i32 - tmask as i32
             };
             bit_index -= bitlen;
-            temp = temp >> bitlen;
+            temp >>= bitlen;
             r_index += 1;
         }
     }
@@ -374,10 +377,10 @@ pub(crate) fn hint_bit_pack<const K: usize, const OMEGA: usize>(h: &[R; K], y_by
     let mut index = 0;
 
     // 3: for i from 0 to k − 1 do
-    for i in 0..=(k - 1) {
+    for i in 0..k {
         //
         // 4: for j from 0 to 255 do
-        for j in 0..=255 {
+        for j in 0..256 {
             //
             // 5: if h[i]_j != 0 then
             if h[i][j] != 0 {
@@ -399,7 +402,7 @@ pub(crate) fn hint_bit_pack<const K: usize, const OMEGA: usize>(h: &[R; K], y_by
 
 
 /// Algorithm 15 HintBitUnpack(y) on page 24.
-///Reverses the procedure HintBitPack.
+///Reverses the procedure `HintBitPack`.
 pub(crate) fn hint_bit_unpack<const K: usize, const OMEGA: usize>(
     y_bytes: &[u8], h: &mut Option<[R; K]>,
 ) {
@@ -414,7 +417,7 @@ pub(crate) fn hint_bit_unpack<const K: usize, const OMEGA: usize>(
     let mut index = 0;
 
     // 3: for i from 0 to k − 1 do
-    for i in 0..=(K - 1) {
+    for i in 0..K {
         //
         // 4: if y[ω + i] < Index or y[ω + i] > ω then return ⊥
         if (y_bytes[OMEGA + i] < index) | (y_bytes[OMEGA + i] > OMEGA as u8) {
@@ -535,21 +538,21 @@ mod tests {
     #[test]
     fn test_coef_from_three_bytes1() {
         let bytes = [0x12u8, 0x34, 0x56];
-        let res = coef_from_three_bytes(&bytes).unwrap();
+        let res = coef_from_three_bytes(bytes).unwrap();
         assert_eq!(res, 0x563412);
     }
 
     #[test]
     fn test_coef_from_three_bytes2() {
         let bytes = [0x12u8, 0x34, 0x80];
-        let res = coef_from_three_bytes(&bytes).unwrap();
+        let res = coef_from_three_bytes(bytes).unwrap();
         assert_eq!(res, 0x003412);
     }
 
     #[test]
     fn test_coef_from_three_bytes3() {
         let bytes = [0x01u8, 0xe0, 0x80];
-        let res = coef_from_three_bytes(&bytes).unwrap();
+        let res = coef_from_three_bytes(bytes).unwrap();
         assert_eq!(res, 0x00e001);
     }
 
@@ -557,7 +560,7 @@ mod tests {
     #[should_panic]
     fn test_coef_from_three_bytes4() {
         let bytes = [0x01u8, 0xe0, 0x7f];
-        let res = coef_from_three_bytes(&bytes).unwrap();
+        let res = coef_from_three_bytes(bytes).unwrap();
         assert_eq!(res, 0x563412);
     }
 
@@ -611,14 +614,14 @@ mod tests {
     fn test_simple_bit_unpack_validation1() {
         // wrong size of bytes
         let random_bytes: Vec<u8> = (0..32 * 7).map(|_| rand::random::<u8>()).collect();
-        let r = simple_bit_unpack(&random_bytes, 2u32.pow(6) - 1).unwrap();
+        let _r = simple_bit_unpack(&random_bytes, 2u32.pow(6) - 1).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn test_bit_unpack_validation1() {
         // wrong size of bytes
-        let random_bytes: Vec<u8> = (0..32 * 7).map(|_| rand::random::<u8>()).collect();
+        let random_bytes: Vec<u8> = (0..32 * 6).map(|_| rand::random::<u8>()).collect();
         let _r = bit_unpack(&random_bytes, 0, 2u32.pow(6) - 1);
     }
 

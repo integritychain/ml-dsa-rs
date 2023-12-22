@@ -15,7 +15,7 @@ pub(crate) fn h_xof(v: &[&[u8]]) -> impl XofReader {
 }
 
 
-/// Function H_128(v, d) of (8.2) on page 29.
+/// Function `H_128(v, d)` of (8.2) on page 29.
 pub(crate) fn h128_xof(v: &[&[u8]]) -> impl XofReader {
     let mut hasher = Shake128::default();
     v.iter().for_each(|b| hasher.update(b));
@@ -93,12 +93,12 @@ pub(crate) fn rej_ntt_poly(rhos: &[&[u8]], a_hat: &mut T) {
         // 4: a_hat[j] ← CoefFromThreeBytes(H128(ρ)[[c]], H128(ρ)[[c + 1]], H128(ρ)[[c + 2]])
         let mut h128pc = [0u8; 3];
         xof.read(&mut h128pc); // implicit c += 3
-        let a_hat_j = conversion::coef_from_three_bytes(&h128pc);
+        let a_hat_j = conversion::coef_from_three_bytes(h128pc);
 
         // 5: c ← c + 3  (implicit)
 
         // 6: if a_hat[j] != ⊥ then
-        if a_hat_j == None {
+        if a_hat_j.is_none() {
             continue; // leave j alone and re-run
         }
         //
@@ -140,17 +140,22 @@ pub(crate) fn rej_bounded_poly<const ETA: usize>(rhos: &[&[u8]], a: &mut R) {
         let z1 = conversion::coef_from_half_byte::<ETA>(z[0] / 16);
 
         // 7: if z0 != ⊥ then
-        if z0.is_some() {
-            //
-            // 8: aj ← z0
-            a[j] = z0.unwrap();
-
-            // 9: j ← j + 1
+        if let Some(x) = z0 {
+            a[j] = x;
             j += 1;
-            //
+        //}
+        // if z0.is_some() {
+        //     //
+        //     // 8: aj ← z0
+        //     a[j] = z0.unwrap();
+        //
+        //     // 9: j ← j + 1
+        //     j += 1;
+        //     //
         } // 10: end if
           //
           // 11: if z1 != ⊥ and j < 256 then
+        #[allow(clippy::unnecessary_unwrap)]
         if z1.is_some() & (j < 256) {
             //
             // 12: aj ← z1
@@ -169,17 +174,18 @@ pub(crate) fn rej_bounded_poly<const ETA: usize>(rhos: &[&[u8]], a: &mut R) {
 
 
 /// Algorithm 26 ExpandA(ρ) on page 31.
-/// Samples a k × ℓ matrix A_hat of elements of T_q.
+/// Samples a k × ℓ matrix `A_hat` of elements of `T_q`.
 pub(crate) fn expand_a<const K: usize, const L: usize>(rho: &[u8; 32]) -> [[T; L]; K] {
     // Input: ρ ∈{0,1}^256.
     // Output: Matrix A_hat
     let mut cap_a_hat = [[T::zero(); L]; K];
 
     // 1: for r from 0 to k − 1 do
-    for r in 0..=(K - 1) {
+    #[allow(clippy::needless_range_loop)]
+    for r in 0..K {
         //
         // 2: for s from 0 to ℓ − 1 do
-        for s in 0..=(L - 1) {
+        for s in 0..L {
             //
             // 3: A_hat[r, s] ← RejNTTPoly(ρ||IntegerToBits(s, 8)||IntegerToBits(r, 8))
             rej_ntt_poly(&[&rho[..], &[s as u8], &[r as u8]], &mut cap_a_hat[r][s]);
@@ -192,7 +198,7 @@ pub(crate) fn expand_a<const K: usize, const L: usize>(rho: &[u8; 32]) -> [[T; L
 
 
 /// Algorithm 27 ExpandS(ρ) on page 32.
-/// Samples vectors s1 ∈ R^ℓ_q and s2 ∈ R^k_q, each with coefficients in the interval [−η, η].
+/// Samples vectors s1 ∈ `R^ℓ_q` and s2 ∈ `R^k_q`, each with coefficients in the interval [−η, η].
 pub(crate) fn expand_s<const ETA: usize, const K: usize, const L: usize>(
     rho: &[u8; 64],
 ) -> ([R; L], [R; K]) {
@@ -201,7 +207,8 @@ pub(crate) fn expand_s<const ETA: usize, const K: usize, const L: usize>(
     let (mut s1, mut s2) = ([R::zero(); L], [R::zero(); K]);
 
     // 1: for r from 0 to ℓ − 1 do
-    for r in 0..=(L - 1) {
+    #[allow(clippy::needless_range_loop)]
+    for r in 0..L {
         //
         // 2: s1[r] ← RejBoundedPoly(ρ||IntegerToBits(r, 16))
         rej_bounded_poly::<ETA>(&[rho, &[r as u8], &[0]], &mut s1[r]);
@@ -209,7 +216,8 @@ pub(crate) fn expand_s<const ETA: usize, const K: usize, const L: usize>(
     } // 3: end for
 
     // 4: for r from 0 to k − 1 do
-    for r in 0..=(K - 1) {
+    #[allow(clippy::needless_range_loop)]
+    for r in 0..K {
         //
         // 5: s2[r] ← RejBoundedPoly(ρ||IntegerToBits(r + ℓ, 16))
         debug_assert!((r + L) < 255);
@@ -228,7 +236,7 @@ pub(crate) fn expand_s<const ETA: usize, const K: usize, const L: usize>(
 
 
 /// Algorithm 28 ExpandMask(ρ, µ) from page 32.
-/// Samples a vector s ∈ R^ℓ_q such that each polynomial s_j has coeffcients between −γ1 + 1 and γ1.
+/// Samples a vector s ∈ `R^ℓ_q` such that each polynomial `s_j` has coeffcients between −γ1 + 1 and γ1.
 pub(crate) fn expand_mask<const GAMMA1: usize, const L: usize>(rho: &[u8; 64], mu: u32) -> [R; L] {
     // Input: A bit string ρ ∈{0,1}^512 and a nonnegative integer µ.
     // Output: Vector s ∈ R^ℓ_q.
@@ -240,7 +248,7 @@ pub(crate) fn expand_mask<const GAMMA1: usize, const L: usize>(rho: &[u8; 64], m
     debug_assert!((c == 18) | (c == 20));
 
     // 2: for r from 0 to ℓ − 1 do
-    for r in 0..=(L - 1) {
+    for r in 0..L {
         //
         // 3: n ← IntegerToBits(µ + r, 16)
         debug_assert!((mu < 128) & (r < 128));
@@ -255,7 +263,7 @@ pub(crate) fn expand_mask<const GAMMA1: usize, const L: usize>(rho: &[u8; 64], m
 
         debug_assert!(s.iter().all(|r| r
             .iter()
-            .all(|&c| (c >= -(GAMMA1 as i32) + 1) & (c <= GAMMA1 as i32))));
+            .all(|&c| (c > -(GAMMA1 as i32)) & (c <= GAMMA1 as i32))));
     } // 6: end for
 
     // 7: return s

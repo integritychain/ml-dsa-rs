@@ -1,10 +1,11 @@
 #[cfg(test)]
 mod tests {
-    use crate::encodings::{pk_decode, pk_encode};
+    //use crate::encodings::{pk_decode, pk_encode};
     use hex;
     use regex::Regex;
     use std::fs;
 
+    use crate::traits::{KeyGen, SerDes, Signer, Verifier};
     use crate::{ml_dsa_44, ml_dsa_65, ml_dsa_87};
     use rand_core::{CryptoRng, RngCore};
 
@@ -22,8 +23,8 @@ mod tests {
             out.copy_from_slice(&x)
         }
 
-        fn try_fill_bytes(&mut self, _: &mut [u8]) -> Result<(), rand_core::Error> {
-            unimplemented!()
+        fn try_fill_bytes(&mut self, out: &mut [u8]) -> Result<(), rand_core::Error> {
+            Ok(self.fill_bytes(out))
         }
     }
     impl CryptoRng for MyRng {}
@@ -78,25 +79,25 @@ mod tests {
             get_keygen_vec("./src/test_vectors/Key Generation -- ML-DSA-44.txt");
         let mut rnd = MyRng::new();
         rnd.push(&seed);
-        let (pk_act, sk_act) = ml_dsa_44::key_gen(&mut rnd);
-        assert_eq!(pk_exp, pk_act.to_bytes());
-        assert_eq!(sk_exp, sk_act.to_bytes());
+        let (pk_act, sk_act) = ml_dsa_44::KG::key_gen_with_rng(&mut rnd).unwrap();
+        assert_eq!(pk_exp, pk_act.into_bytes());
+        assert_eq!(sk_exp, sk_act.into_bytes());
 
         let (seed, pk_exp, sk_exp) =
             get_keygen_vec("./src/test_vectors/Key Generation -- ML-DSA-65.txt");
         let mut rnd = MyRng::new();
         rnd.push(&seed);
-        let (pk_act, sk_act) = ml_dsa_65::key_gen(&mut rnd);
-        assert_eq!(pk_exp, pk_act.to_bytes());
-        assert_eq!(sk_exp, sk_act.to_bytes());
+        let (pk_act, sk_act) = ml_dsa_65::KG::key_gen_with_rng(&mut rnd).unwrap();
+        assert_eq!(pk_exp, pk_act.into_bytes());
+        assert_eq!(sk_exp, sk_act.into_bytes());
 
         let (seed, pk_exp, sk_exp) =
             get_keygen_vec("./src/test_vectors/Key Generation -- ML-DSA-87.txt");
         let mut rnd = MyRng::new();
         rnd.push(&seed);
-        let (pk_act, sk_act) = ml_dsa_87::key_gen(&mut rnd);
-        assert_eq!(pk_exp, pk_act.to_bytes());
-        assert_eq!(sk_exp, sk_act.to_bytes());
+        let (pk_act, sk_act) = ml_dsa_87::KG::key_gen_with_rng(&mut rnd).unwrap();
+        assert_eq!(pk_exp, pk_act.into_bytes());
+        assert_eq!(sk_exp, sk_act.into_bytes());
     }
 
     fn get_sign_vec(filename: &str) -> (Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) {
@@ -155,27 +156,27 @@ mod tests {
     fn test_sign() {
         let (message, sk, seed, sig_exp) =
             get_sign_vec("./src/test_vectors/Signature Generation -- ML-DSA-44.txt");
-        let sk = ml_dsa_44::PrivateKey::from_bytes(&sk.try_into().unwrap());
+        let sk = ml_dsa_44::PrivateKey::try_from_bytes(sk.try_into().unwrap()).unwrap();
         let mut rnd = MyRng::new();
         rnd.push(&seed);
-        let sig_act = sk.sign(&mut rnd, &message);
-        assert_eq!(sig_exp, sig_act.unwrap().to_bytes());
+        let sig_act = sk.try_sign_with_rng(&mut rnd, &message);
+        assert_eq!(sig_exp, sig_act.unwrap().into_bytes());
 
         let (message, sk, seed, sig_exp) =
             get_sign_vec("./src/test_vectors/Signature Generation -- ML-DSA-65.txt");
-        let sk = ml_dsa_65::PrivateKey::from_bytes(&sk.try_into().unwrap());
+        let sk = ml_dsa_65::PrivateKey::try_from_bytes(sk.try_into().unwrap()).unwrap();
         let mut rnd = MyRng::new();
         rnd.push(&seed);
-        let sig_act = sk.sign(&mut rnd, &message);
-        assert_eq!(sig_exp, sig_act.unwrap().to_bytes());
+        let sig_act = sk.try_sign_with_rng(&mut rnd, &message);
+        assert_eq!(sig_exp, sig_act.unwrap().into_bytes());
 
         let (message, sk, seed, sig_exp) =
             get_sign_vec("./src/test_vectors/Signature Generation -- ML-DSA-87.txt");
-        let sk = ml_dsa_87::PrivateKey::from_bytes(&sk.try_into().unwrap());
+        let sk = ml_dsa_87::PrivateKey::try_from_bytes(sk.try_into().unwrap()).unwrap();
         let mut rnd = MyRng::new();
         rnd.push(&seed);
-        let sig_act = sk.sign(&mut rnd, &message);
-        assert_eq!(sig_exp, sig_act.unwrap().to_bytes());
+        let sig_act = sk.try_sign_with_rng(&mut rnd, &message);
+        assert_eq!(sig_exp, sig_act.unwrap().into_bytes());
     }
 
     fn get_verify_vec(filename: &str) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
@@ -222,22 +223,25 @@ mod tests {
     fn test_verify() {
         let (pk, message, signature) =
             get_verify_vec("./src/test_vectors/Signature Verification -- ML-DSA-44.txt");
-        let pk = ml_dsa_44::PublicKey::from_bytes(&pk.try_into().unwrap());
-        let signature = ml_dsa_44::Signature::from_bytes(&signature.try_into().unwrap());
+        let pk = ml_dsa_44::PublicKey::try_from_bytes(pk.try_into().unwrap()).unwrap();
+        let signature =
+            ml_dsa_44::Signature::try_from_bytes(signature.try_into().unwrap()).unwrap();
         let pass = pk.verify(&message, &signature);
         assert!(pass.unwrap());
 
         let (pk, message, signature) =
             get_verify_vec("./src/test_vectors/Signature Verification -- ML-DSA-65.txt");
-        let pk = ml_dsa_65::PublicKey::from_bytes(&pk.try_into().unwrap());
-        let signature = ml_dsa_65::Signature::from_bytes(&signature.try_into().unwrap());
+        let pk = ml_dsa_65::PublicKey::try_from_bytes(pk.try_into().unwrap()).unwrap();
+        let signature =
+            ml_dsa_65::Signature::try_from_bytes(signature.try_into().unwrap()).unwrap();
         let pass = pk.verify(&message, &signature);
         assert!(pass.unwrap());
 
         let (pk, message, signature) =
             get_verify_vec("./src/test_vectors/Signature Verification -- ML-DSA-87.txt");
-        let pk = ml_dsa_87::PublicKey::from_bytes(&pk.try_into().unwrap());
-        let signature = ml_dsa_87::Signature::from_bytes(&signature.try_into().unwrap());
+        let pk = ml_dsa_87::PublicKey::try_from_bytes(pk.try_into().unwrap()).unwrap();
+        let signature =
+            ml_dsa_87::Signature::try_from_bytes(signature.try_into().unwrap()).unwrap();
         let pass = pk.verify(&message, &signature);
         assert!(pass.unwrap());
     }

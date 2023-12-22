@@ -24,7 +24,7 @@ pub(crate) fn pk_encode<const K: usize, const PK_LEN: usize>(
     pk[0..32].copy_from_slice(p);
 
     // 2: for i from 0 to k − 1 do
-    for i in 0..=(K - 1) {
+    for i in 0..K {
         //
         // 3: pk ← pk || SimpleBitPack (t1[i], 2^{bitlen(q−1)−d}-1)
         // simple_bit_pack(
@@ -60,7 +60,7 @@ pub(crate) fn pk_decode<const K: usize, const PK_LEN: usize>(
     rho.copy_from_slice(&pk[0..32]);
 
     // 3: for i from 0 to k − 1 do
-    for i in 0..=(K - 1) {
+    for i in 0..K {
         //
         // 4: t1[i] ← SimpleBitUnpack(zi, 2^{bitlen(q−1)−d} − 1)) ▷ This is always in the correct range
         t1[i] = simple_bit_unpack(
@@ -94,14 +94,14 @@ pub fn sk_encode<
     // Output: Private key, sk ∈ B^{32+32+64+32·((k+ℓ)·bitlen(2η)+dk)}
     let mut sk = [0u8; SK_LEN];
 
-    let (c_min, c_max) = (-1 * ETA as i32, ETA as i32);
+    let (c_min, c_max) = (- (ETA as i32), ETA as i32);
     debug_assert!(s1
         .iter()
         .all(|r| r.iter().all(|c| (*c >= c_min) & (*c <= c_max))));
     debug_assert!(s2
         .iter()
         .all(|r| r.iter().all(|c| (*c >= c_min) & (*c <= c_max))));
-    let (c_min, c_max) = (-1 * 2i32.pow(D as u32 - 1) + 1, 2i32.pow(D as u32 - 1));
+    let (c_min, c_max) = (-(2i32.pow(D as u32 - 1)) + 1, 2i32.pow(D as u32 - 1));
     debug_assert!(t0
         .iter()
         .all(|r| r.iter().all(|c| (*c >= c_min) & (*c <= c_max))));
@@ -115,7 +115,7 @@ pub fn sk_encode<
     // 2: for i from 0 to ℓ − 1 do
     let start = 128;
     let step = 32 * bitlen(2 * ETA);
-    for i in 0..=(L - 1) {
+    for i in 0..L {
         //
         // 3: sk ← sk || BitPack (s1[i], η, η)
         bit_pack(
@@ -129,7 +129,7 @@ pub fn sk_encode<
       //
       // 5: for i from 0 to k − 1 do
     let start = start + L * step;
-    for i in 0..=(K - 1) {
+    for i in 0..K {
         //
         // 6: sk ← sk || BitPack (s2[i], η, η)
         bit_pack(
@@ -144,7 +144,7 @@ pub fn sk_encode<
     // 8: for i from 0 to k − 1 do
     let start = start + K * step;
     let step = 32 * D; //((2u32.pow(D as u32 - 1)).ilog2() as usize + 1);
-    for i in 0..=(K - 1) {
+    for i in 0..K {
         //
         // 9: sk ← sk || BitPack (t0[i], [−2^{d-1} + 1, 2^{d-1}] )
         bit_pack(
@@ -162,6 +162,7 @@ pub fn sk_encode<
 
 /// Algorithm 19 skDecode(sk) on page 27.
 /// Reverses the procedure skEncode.
+#[allow(clippy::similar_names, clippy::type_complexity)]
 pub(crate) fn sk_decode<
     const D: usize,
     const ETA: usize,
@@ -195,7 +196,7 @@ pub(crate) fn sk_decode<
     // 5: for i from 0 to ℓ − 1 do
     let start = 128;
     let step = 32 * bl;
-    for i in 0..=(L - 1) {
+    for i in 0..L {
         //
         // 6: s1[i] ← BitUnpack(yi, η, η)   ▷ This may lie outside [−η, η], if input is malformed
         s1[i] = bit_unpack(&sk[start + i * step..start + (i + 1) * step], ETA as u32, ETA as u32)?;
@@ -204,7 +205,7 @@ pub(crate) fn sk_decode<
 
     // 8: for i from 0 to k − 1 do
     let start = start + L * step;
-    for i in 0..=(K - 1) {
+    for i in 0..K {
         //
         // 9: s2[i] ← BitUnpack(zi, η, η) ▷ This may lie outside [−η, η], if input is malformed
         s2[i] = bit_unpack(&sk[start + i * step..start + (i + 1) * step], ETA as u32, ETA as u32)?;
@@ -214,7 +215,7 @@ pub(crate) fn sk_decode<
     // 11: for i from 0 to k − 1 do
     let start = start + K * step;
     let step = 32 * D;
-    for i in 0..=(K - 1) {
+    for i in 0..K {
         //
         // 12: t0[i] ← BitUnpack(wi, −2^{d−1} - 1, 2^{d−1})   ▷ This is always in the correct range
         t0[i] = bit_unpack(
@@ -227,21 +228,21 @@ pub(crate) fn sk_decode<
     debug_assert_eq!(start + K * step, sk.len());
 
     // Note spec is not consistent on the range constraints for s1 and s2; this is tighter
-    let (c_min, c_max) = (-1 * ETA as i32, ETA as i32);
+    let (c_min, c_max) = (-(ETA as i32), ETA as i32);
     let s1_ok = s1
         .iter()
         .all(|r| r.iter().all(|c| (*c >= c_min) & (*c <= c_max)));
     let s2_ok = s2
         .iter()
         .all(|r| r.iter().all(|c| (*c >= c_min) & (*c <= c_max)));
-    let (c_min, c_max) = (-1 * 2i32.pow(D as u32 - 1) + 1, 2i32.pow(D as u32 - 1));
+    let (c_min, c_max) = (-(2i32.pow(D as u32 - 1)) + 1, 2i32.pow(D as u32 - 1));
     let t0_ok = t0
         .iter()
         .all(|r| r.iter().all(|c| (*c >= c_min) & (*c <= c_max)));
     if s1_ok & s2_ok & t0_ok {
-        return Ok((rho, k, tr, s1, s2, t0));
+        Ok((rho, k, tr, s1, s2, t0))
     } else {
-        return Err("Invalid sk_decode deserialization");
+        Err("Invalid sk_decode deserialization")
     }
 }
 
@@ -255,8 +256,8 @@ mod tests {
         // D=13 K=4 PK_LEN=1312
         let mut random_pk = [0u8; 1312];
         random_pk.iter_mut().for_each(|a| *a = rand::random::<u8>());
-        let mut rho = [0u8; 32];
-        let mut t1 = [[0i32; 256]; 4];
+        //let mut rho = [0u8; 32];
+        //let mut t1 = [[0i32; 256]; 4];
         let (rho, t1) = pk_decode::<4, 1312>(&random_pk).unwrap();
         //let mut res = [0u8; 1312];
         let res = pk_encode::<4, 1312>(&rho, &t1);
@@ -268,8 +269,8 @@ mod tests {
         // D=13 K=6 PK_LEN=1952
         let mut random_pk = [0u8; 1952];
         random_pk.iter_mut().for_each(|a| *a = rand::random::<u8>());
-        let mut rho = [0u8; 32];
-        let mut t1 = [[0i32; 256]; 6];
+        //let mut rho = [0u8; 32];
+        //let mut t1 = [[0i32; 256]; 6];
         let (rho, t1) = pk_decode::<6, 1952>(&random_pk.try_into().unwrap()).unwrap();
         //let mut res = [0u8; 1952];
         let res = pk_encode::<6, 1952>(&rho, &t1);
@@ -281,8 +282,8 @@ mod tests {
         // D=13 K=8 PK_LEN=2592
         let mut random_pk = [0u8; 2592];
         random_pk.iter_mut().for_each(|a| *a = rand::random::<u8>());
-        let mut rho = [0u8; 32];
-        let mut t1 = [[0i32; 256]; 8];
+        //let mut rho = [0u8; 32];
+        //let mut t1 = [[0i32; 256]; 8];
         let (rho, t1) = pk_decode::<8, 2592>(&random_pk.try_into().unwrap()).unwrap();
         //let mut res = [0u8; 2592];
         let res = pk_encode::<8, 2592>(&rho, &t1);
@@ -305,18 +306,18 @@ mod tests {
         //  - maybe need to rework one/two of the conversion functions in a similar fashion
 
         // D=13 ETA=2 K=4 L=4 SK_LEN=2560
-        let (mut rho, mut k) = (rand::random::<[u8; 32]>(), rand::random::<[u8; 32]>());
+        let (rho, k) = (rand::random::<[u8; 32]>(), rand::random::<[u8; 32]>());
         let mut tr = [0u8; 64];
         tr.iter_mut().for_each(|e| *e = rand::random::<u8>());
-        let mut s1 = [get_vec(2), get_vec(2), get_vec(2), get_vec(2)];
-        let mut s2 = [get_vec(2), get_vec(2), get_vec(2), get_vec(2)];
-        let mut t0 = [
+        let s1 = [get_vec(2), get_vec(2), get_vec(2), get_vec(2)];
+        let s2 = [get_vec(2), get_vec(2), get_vec(2), get_vec(2)];
+        let t0 = [
             get_vec(2u32.pow(11)),
             get_vec(2u32.pow(11)),
             get_vec(2u32.pow(11)),
             get_vec(2u32.pow(11)),
         ];
-        let mut sk = [0u8; 2560];
+        //let mut sk = [0u8; 2560];
         let sk = sk_encode::<13, 2, 4, 4, 2560>(&rho, &k, &tr, &s1, &s2, &t0);
         let res = sk_decode::<13, 2, 4, 4, 2560>(&sk);
         assert!(res.is_ok());
@@ -338,11 +339,11 @@ mod tests {
         let c_tilde: Vec<u8> = (0..2 * 128 / 8).map(|_| rand::random::<u8>()).collect();
         let z = [get_vec(2), get_vec(2), get_vec(2), get_vec(2)];
         let h = [get_vec(1), get_vec(1), get_vec(1), get_vec(1)];
-        let mut sigma = [0u8; 2420];
-        sigma = sig_encode::<{ 2usize.pow(17) }, 4, 4, 128, 80, 2420>(&c_tilde, &z, &h);
-        let mut c_test = [0u8; 2 * 128 / 8];
-        let mut z_test = [[0i32; 256]; 4];
-        let mut h_test = [[0i32; 256]; 4];
+        //let mut sigma = [0u8; 2420];
+        let sigma = sig_encode::<{ 2usize.pow(17) }, 4, 4, 128, 80, 2420>(&c_tilde, &z, &h);
+        // let mut c_test = [0u8; 2 * 128 / 8];
+        // let mut z_test = [[0i32; 256]; 4];
+        // let mut h_test = [[0i32; 256]; 4];
         let (c_test, z_test, h_test) =
             sig_decode::<{ 2usize.pow(17) }, 4, 4, 128, 80>(&sigma).unwrap();
         //        assert!(res.is_ok());
@@ -353,7 +354,7 @@ mod tests {
 }
 
 
-/// Algorithm 20 sigEncode(c_tilde, z, h) on page 28.
+/// Algorithm 20 `sigEncode(c_tilde, z, h)` on page 28.
 /// Encodes a signature into a byte string.
 pub(crate) fn sig_encode<
     const GAMMA1: usize,
@@ -379,7 +380,7 @@ pub(crate) fn sig_encode<
     // 2: for i from 0 to ℓ − 1 do
     let start = 2 * LAMBDA / 8;
     let step = 32 * (1 + bl);
-    for i in 0..=(L - 1) {
+    for i in 0..L {
         //
         // 3: σ ← σ || BitPack (z[i], γ_1 − 1, γ_1)
         bit_pack(
@@ -399,6 +400,7 @@ pub(crate) fn sig_encode<
 
 /// Algorithm 21 sigDecode(σ) on page 28.
 /// Reverses the procedure sigEncode.
+#[allow(clippy::type_complexity)]
 pub(crate) fn sig_decode<
     const GAMMA1: usize,
     const K: usize,
@@ -424,7 +426,7 @@ pub(crate) fn sig_decode<
     // 3: for i from 0 to ℓ − 1 do
     let start = LAMBDA / 4;
     let step = 32 * (bl + 1);
-    for i in 0..=(L - 1) {
+    for i in 0..L {
         //
         // 4: z[i] ← BitUnpack(xi, γ1 − 1, γ1) ▷ This is always in the correct range, as γ1 is a power of 2
         z[i] = bit_unpack(
@@ -458,7 +460,7 @@ pub(crate) fn w1_encode<const K: usize, const GAMMA2: usize>(w1: &[R; K], w1_til
 
     // 2: for i from 0 to k − 1 do
     let step = 32 * bl;
-    for i in 0..=(K - 1) {
+    for i in 0..K {
         //
         // 3: w1_tilde ← w1_tilde || BytesToBits (SimpleBitPack (w1[i], (q − 1)/(2γ2) − 1))
         simple_bit_pack(&w1[i], qm12gm1, &mut w1_tilde[i * step..(i + 1) * step]);
