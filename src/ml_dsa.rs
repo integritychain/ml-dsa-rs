@@ -1,97 +1,15 @@
-use crate::algs::{inv_ntt, ntt};
 use crate::encodings::{
     pk_decode, pk_encode, sig_decode, sig_encode, sk_decode, sk_encode, w1_encode,
 };
 use crate::hashing::{expand_a, expand_mask, expand_s, h_xof, sample_in_ball};
 use crate::helpers::{bitlen, mod_pm};
 use crate::high_low::{high_bits, low_bits, make_hint, power2round, use_hint};
+use crate::ntt::{inv_ntt, ntt};
 use crate::types::{Zero, R, T};
-use crate::{D, QI, QU};
+use crate::{helpers, D, QI, QU};
 use rand_core::CryptoRngCore;
 use sha3::digest::XofReader;
 
-
-/// Matrix by vector multiplication; See top of page 10, first row: `w_hat` = `A_hat` mul `u_hat`
-#[must_use]
-pub(crate) fn mat_vec_mul<const K: usize, const L: usize>(
-    a_hat: &[[[i32; 256]; L]; K], u_hat: &[[i32; 256]; L],
-) -> [[i32; 256]; K] {
-    let mut w_hat = [[0i32; 256]; K];
-    #[allow(clippy::needless_range_loop)]
-    for i in 0..K {
-        #[allow(clippy::needless_range_loop)]
-        for j in 0..L {
-            //let tmp = multiply_ntts(&a_hat[i][j], &u_hat[j]);
-            let mut tmp = [0i32; 256];
-            tmp.iter_mut().enumerate().for_each(|(m, e)| {
-                *e = (a_hat[i][j][m] as i64 * u_hat[j][m] as i64).rem_euclid(QI as i64) as i32;
-            });
-            for k in 0..256 {
-                w_hat[i][k] = (w_hat[i][k] + tmp[k]).rem_euclid(QI);
-            }
-        }
-    }
-    w_hat
-}
-
-/// Vector addition; See bottom of page 9, second row: `z_hat` = `u_hat` + `v_hat`
-#[must_use]
-pub(crate) fn vec_add<const K: usize>(vec_a: &[R; K], vec_b: &[R; K]) -> [R; K] {
-    let mut result = [R::zero(); K];
-    for i in 0..vec_a.len() {
-        for j in 0..vec_a[i].len() {
-            result[i][j] = (vec_a[i][j] + vec_b[i][j]).rem_euclid(QI);
-        }
-    }
-    result
-}
-
-/// Algorithm 10 `MultiplyNTTs(f, g)` on page 24 of FIPS 203.
-/// Computes the product (in the ring Tq ) of two NTT representations.
-// #[must_use]
-// #[allow(clippy::cast_possible_truncation)]
-// pub fn multiply_ntts(f_hat: &T, g_hat: &T) -> T {
-//     // Input: Two arrays f_hat ∈ Z^{256}_q and g_hat ∈ Z^{256}_q        ▷ the coeffcients of two NTT representations
-//     // Output: An array h_hat ∈ Z^{256}_q                               ▷ the coeffcients of the product of the inputs
-//     let mut h_hat: T = T::zero();
-//
-//     // for (i ← 0; i < 128; i ++)
-//     for i in 0..128 {
-//         //
-//         // 2: (h_hat[2i], h_hat[2i + 1]) ← BaseCaseMultiply( f_hat[2i], f_hat[2i + 1], g_hat[2i], g_hat[2i + 1], ζ^{2BitRev7(i) + 1})
-//         let xx = pow_mod_q(ZETA, (i as u8).reverse_bits() + 1);
-//         let (h_hat_2i, h_hat_2ip1) = base_case_multiply(
-//             f_hat[2 * i],
-//             f_hat[2 * i + 1],
-//             g_hat[2 * i],
-//             g_hat[2 * i + 1],
-//             //pow_mod_q(ZETA, 2 * ((i as u8).reverse_bits() >> 1) + 1),
-//             xx,
-//         );
-//         h_hat[2 * i] = h_hat_2i;
-//         h_hat[2 * i + 1] = h_hat_2ip1;
-//     } // 3: end for
-//
-//     h_hat // 4: return h_hat
-// }
-
-/// Algorithm 11 `BaseCaseMultiply(a0, a1, b0, b1, gamma)` on page 24 of FIPS 203.
-/// Computes the product of two degree-one polynomials with respect to a quadratic modulus.
-// #[must_use]
-// pub fn base_case_multiply(a0: i32, a1: i32, b0: i32, b1: i32, gamma: i32) -> (i32, i32) {
-//     let (a0, a1, b0, b1, gamma) = (a0 as i128, a1 as i128, b0 as i128, b1 as i128, gamma as i128);
-//     // Input: a0 , a1 , b0 , b1 ∈ Z_q               ▷ the coefficients of a0 + a1 X and b0 + b1 X
-//     // Input: γ ∈ Z_q                               ▷ the modulus is X^2 − γ
-//     // Output: c0 , c1 ∈ Z_q                        ▷ the coeffcients of the product of the two polynomials
-//     // 1: c0 ← a0 · b0 + a1 · b1 · γ                ▷ steps 1-2 done modulo q
-//     let c0 = (a0 * b0 + a1 * b1 * gamma).rem_euclid(QI as i128);
-//
-//     // 2: 2: c1 ← a0 · b1 + a1 · b0
-//     let c1 = (a0 * b1 + a1 * b0).rem_euclid(QI as i128);
-//
-//     // 3: return c0 , c1
-//     (c0 as i32, c1 as i32)
-// }
 
 /// Algorithm 1 ML-DSA.KeyGen() on page 15.
 /// Generates a public-private key pair.
@@ -109,8 +27,7 @@ pub(crate) fn key_gen<
 
     // 1: ξ ← {0,1}^{256}    ▷ Choose random seed
     let mut xi = [0u8; 32];
-    rng.try_fill_bytes(&mut xi)
-        .map_err(|_| "Random number generator failed")?;
+    rng.try_fill_bytes(&mut xi).map_err(|_| "Random number generator failed")?;
 
     // 2: (ρ, ρ′, K) ∈ {0,1}^{256} × {0,1}^{512} × {0,1}^{256} ← H(ξ, 1024)    ▷ Expand seed
     let mut h = h_xof(&[&xi]);
@@ -132,12 +49,12 @@ pub(crate) fn key_gen<
     for i in 0..L {
         s_1_hat[i] = ntt(&s_1[i]);
     }
-    let ntt_p1: [T; K] = mat_vec_mul(&cap_a_hat, &s_1_hat);
+    let ntt_p1: [T; K] = helpers::mat_vec_mul(&cap_a_hat, &s_1_hat);
     let mut t: [R; K] = [R::zero(); K];
     for l in 0..K {
         t[l] = inv_ntt(&ntt_p1[l]);
     }
-    t = vec_add(&t, &s_2);
+    t = helpers::vec_add(&t, &s_2);
 
     // 6: (t_1 , t_0 ) ← Power2Round(t, d)              ▷ Compress t
     let mut t_1: [R; K] = [R::zero(); K];
@@ -191,8 +108,14 @@ pub(crate) fn sign<
 
     // 1:  (ρ, K, tr, s_1 , s_2 , t_0 ) ← skDecode(sk)
     #[allow(clippy::type_complexity)]
-    let (rho, cap_k, tr, s_1, s_2, t_0): ([u8; 32], [u8; 32], [u8; 64], [R; L], [R; K], [R; K]) =
-        sk_decode::<{ D as usize }, ETA, K, L, SK_LEN>(sk)?;
+    let (rho, cap_k, tr, s_1, s_2, t_0): (
+        [u8; 32],
+        [u8; 32],
+        [u8; 64],
+        [R; L],
+        [R; K],
+        [R; K],
+    ) = sk_decode::<{ D as usize }, ETA, K, L, SK_LEN>(sk)?;
 
     // 2:  s_hat_1 ← NTT(s_1)
     let mut s_hat_1: [T; L] = [T::zero(); L];
@@ -246,7 +169,7 @@ pub(crate) fn sign<
         for i in 0..L {
             ntt_y[i] = ntt(&y[i]);
         }
-        let ntt_p1: [T; K] = mat_vec_mul(&cap_a_hat, &ntt_y);
+        let ntt_p1: [T; K] = helpers::mat_vec_mul(&cap_a_hat, &ntt_y);
         let mut w: [R; K] = [R::zero(); K];
         for l in 0..K {
             w[l] = inv_ntt(&ntt_p1[l]);
@@ -323,13 +246,10 @@ pub(crate) fn sign<
         }
 
         // 23: if ||z||∞ ≥ Gamma1 − β or ||r0||∞ ≥ Gamma2 − β then (z, h) ← ⊥    ▷ Validity checks
-        let z_norm = infinity_norm(&z.unwrap());
-        let r0_norm = infinity_norm(&r0);
+        let z_norm = helpers::infinity_norm(&z.unwrap());
+        let r0_norm = helpers::infinity_norm(&r0);
         if (z_norm >= (GAMMA1 as i32 - BETA as i32)) | (r0_norm >= (GAMMA2 as i32 - BETA as i32)) {
-            //assert_eq!(infinity_norm(&z.unwrap()), GAMMA1 as i32 - BETA as i32);
-            //assert_eq!(infinity_norm(&r0), GAMMA2 as i32 - BETA as i32);
             (z, h) = (None, None);
-            println!("oh boy");
             //
             // 24: else
         } else {
@@ -361,15 +281,9 @@ pub(crate) fn sign<
             h = Some(hh);
 
             // 27: if ||⟨⟨c_t_0⟩⟩||∞ ≥ Gamma2 or the number of 1’s in h is greater than ω, then (z, h) ← ⊥
-            if (infinity_norm(&c_t_0) >= GAMMA2 as i32)
-                | (h.unwrap()
-                    .iter()
-                    .flatten()
-                    .filter(|i| (**i).abs() == 1)
-                    .count()
-                    > OMEGA)
+            if (helpers::infinity_norm(&c_t_0) >= GAMMA2 as i32)
+                | (h.unwrap().iter().flatten().filter(|i| (**i).abs() == 1).count() > OMEGA)
             {
-                println!("yes, sir");
                 (z, h) = (None::<[R; L]>, None::<[R; K]>);
             } // 28: end if
               //
@@ -429,7 +343,7 @@ pub(crate) fn verify<
     if h.is_none() {
         return Ok(false);
     };
-    let i_norm = infinity_norm(&z);
+    let i_norm = helpers::infinity_norm(&z);
     assert!(i_norm < GAMMA1 as i32);
     // 4: end if
 
@@ -457,7 +371,7 @@ pub(crate) fn verify<
     for i in 0..L {
         ntt_z[i] = ntt(&z[i]);
     }
-    let ntt_a_z: [T; K] = mat_vec_mul(&cap_a_hat, &ntt_z);
+    let ntt_a_z: [T; K] = helpers::mat_vec_mul(&cap_a_hat, &ntt_z);
 
     let mut ntt_t1: [T; K] = [T::zero(); K];
     for i in 0..K {
@@ -495,7 +409,6 @@ pub(crate) fn verify<
     }
 
     // 12: c_tilde_′ ← H(µ||w1Encode(w′_1), 2λ)     ▷ Hash it; this should match c_tilde
-    //let mut tmp = vec![0u8; 32 * K * 4];  // TODO this size cannot be correct/generic
     let qm12gm1 = (QU - 1) / (2 * GAMMA2 as u32) - 1;
     let bl = bitlen(qm12gm1 as usize);
     let mut tmp = vec![0u8; 32 * K * bl];
@@ -505,26 +418,11 @@ pub(crate) fn verify<
     hasher.read(&mut c_tilde_p);
 
     // 13: return [[ ||z||∞ < γ1 −β]] and [[c_tilde = c_tilde_′]] and [[number of 1’s in h is ≤ ω]]
-    let left = infinity_norm(&z) < ((GAMMA1 - BETA as usize) as i32);
+    let left = helpers::infinity_norm(&z) < ((GAMMA1 - BETA as usize) as i32);
     let center = c_tilde == c_tilde_p;
     let right = h // TODO: this checks #h per each R (rather than overall total)
         .unwrap()
         .iter()
         .all(|&r| r.iter().filter(|&&e| e == 1).sum::<i32>() <= OMEGA as i32);
     Ok(left & center & right)
-}
-
-
-fn infinity_norm<const ROW: usize, const COL: usize>(w: &[[i32; COL]; ROW]) -> i32 {
-    let mut result = 0;
-    #[allow(clippy::needless_range_loop)]
-    for i in 0..w.len() {
-        let inner = w[i];
-        #[allow(clippy::needless_range_loop)]
-        for j in 0..inner.len() {
-            let z_q = mod_pm(inner[j], QU).abs();
-            result = if z_q > result { z_q } else { result };
-        }
-    }
-    result
 }

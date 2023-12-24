@@ -6,17 +6,16 @@
 ![Apache2/MIT licensed][license-image]
 ![Rust Version][rustc-image]
 
-[FIPS 203] (Initial Public Draft) Module-Lattice-Based Digital Signature
-Standard written in pure Rust for server, desktop, browser and embedded applications.
+[FIPS 204] (Initial Public Draft) Module-Lattice-Based Digital Signature Standard written in pure Rust for server, 
+desktop, browser and embedded applications.
 
-This library implements the FIPS 204 **draft** standard in pure Rust with minimal and
-mainstream dependencies. All three security parameter sets are fully functional. The
-code does not require the standard library, e.g. `#[no_std]`, has no heap allocations, 
-and exposes the RNG so will be suitable for the full range of applications.
-The API is being stabilized and significant performance optimizations are forthcoming.
+This crate implements the FIPS 204 **draft** standard in pure Rust with minimal and mainstream dependencies. All 
+three security parameter sets are fully functional. The implementation does not require the standard library, e.g. 
+`#[no_std]`, has no heap allocations, e.g. no `alloc`, and exposes the `RNG` so will be suitable for the full range of 
+applications down to bare-metal. The API is nearly stabilized and significant performance optimizations are forthcoming.
+This crate will quickly follow any changes to FIPS 204 as they become available.
 
-See <https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.204.ipd.pdf> for a full
-description of the target functionality.
+See <https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.204.ipd.pdf> for a full description of the target functionality.
 
 The functionality is extremely simple to use, as demonstrated by the following example.
 
@@ -28,53 +27,38 @@ use crate::ml_dsa_rs::traits::{SerDes, Signer, Verifier};
 let message = [0u8, 1, 2, 3, 4, 5, 6, 7];
 
 // Generate key pair and signature
-let (pk1, sk) = ml_dsa_44::key_gen().unwrap();  // Generate both public and secret keys
-let sig1 = sk.sign(&message); // Use the secret key to generate message signature
+let (pk1, sk) = ml_dsa_44::try_keygen().unwrap();  // Generate both public and secret keys
+let sig1 = sk.try_sign(&message).unwrap(); // Use the secret key to generate message signature
 
 // Serialize then send the public key, message and signature
 let (pk_send, msg_send, sig_send) = (pk1.into_bytes(), message, sig1.into_bytes());
 let (pk_recv, msg_recv, sig_recv) = (pk_send, msg_send, sig_send);
 
 // Deserialize the public key and signature, then verify
-let pk2 = ml_dsa_44::PublicKey::try_from_bytes(pk_recv).expect("public key deserialization failed");
-let sig2 = ml_dsa_44::Signature::try_from_bytes(sig_recv).expect("signature deserialization failed");
-let v = pk2.verify(&msg_recv, &sig2).unwrap(); // Use the public key to verify message signature
+let pk2 = ml_dsa_44::PublicKey::try_from_bytes(pk_recv).expect("PubKey deserialization failed");
+let sig2 = ml_dsa_44::Signature::try_from_bytes(sig_recv).expect("Sig deserialization failed");
+let v = pk2.try_verify(&msg_recv, &sig2).unwrap(); // Use the PubKey to verify message signature
 assert!(v);
 ~~~
 
-Rust [Documentation][docs-link]
+The Rust [Documentation][docs-link] lives under each **Module** corresponding to the desired [security parameter](#modules)
+below. 
 
-## Security Notes
+## Notes
 
-This crate is functional and corresponds to the first initial public draft of FIPS 204.
-This crate is still under construction/refinement -- USE AT YOUR OWN RISK!
+* This crate is fully functional and corresponds to the first initial public draft of FIPS 204.    
+* Note that FIPS 204 places specific requirements on randomness per section 3.5.1, hence the exposed `RNG`.
+* Rust **1.72** or higher. The minimum supported Rust version may be changed in the future, but it will be done with a 
+minor version bump.
+* All on-by-default features of this library are covered by SemVer.
+* MSRV is considered exempt from SemVer as noted above.
 
-## Supported Parameter Sets
-
-- ML-DSA-44
-- ML-DSA-65
-- ML-DSA-87
-
-## Minimum Supported Rust Version
-
-Rust **1.72** or higher.
-
-Minimum supported Rust version can be changed in the future, but it will be
-done with a minor version bump.
-
-## SemVer Policy
-
-- All on-by-default features of this library are covered by SemVer
-- MSRV is considered exempt from SemVer as noted above
+* This software is experimental and still under construction/refinement -- USE AT YOUR OWN RISK!
 
 ## License
 
-All crates licensed under either of
-
-* [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0)
-* [MIT license](http://opensource.org/licenses/MIT)
-
-at your option.
+Contents are licensed under either the [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0)
+or [MIT license](http://opensource.org/licenses/MIT) at your option.
 
 ### Contribution
 
@@ -104,4 +88,4 @@ dual licensed as above, without any additional terms or conditions.
 
 [IntegrityChain]: https://github.com/integritychain/
 
-[FIPS 203]: https://csrc.nist.gov/pubs/fips/204/ipd
+[FIPS 204]: https://csrc.nist.gov/pubs/fips/204/ipd

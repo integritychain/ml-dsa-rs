@@ -3,25 +3,23 @@
 #![deny(warnings)]
 #![deny(missing_docs)]
 #![doc = include_str!("../README.md")]
-
 // To remove...need to drastically rework element+math
 #![allow(clippy::cast_lossless)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_sign_loss)]
 
-mod algs;
+
 mod conversion;
 mod encodings;
 mod hashing;
 mod helpers;
 mod high_low;
 mod ml_dsa;
-mod smoke_test;
-mod test_vectors;
+mod ntt;
 mod types;
 
-/// Trait documentation here
+/// All functionality is covered by traits, such that consumers can utilize trait objects as desired.
 pub mod traits;
 
 const QI: i32 = 8_380_417; // 2i32.pow(23) - 2i32.pow(13) + 1;
@@ -36,41 +34,54 @@ macro_rules! functionality {
         use crate::ml_dsa;
         use crate::traits::{KeyGen, SerDes, Signer, Verifier};
         use rand_core::CryptoRngCore;
-        #[cfg(feature = "default-rng")]
-        use rand_core::OsRng;
+        //#[cfg(feature = "default-rng")]
+        //use rand_core::OsRng;
         use zeroize::{Zeroize, ZeroizeOnDrop};
 
 
-        // ----- DATA TYPES -----
+        // ----- 'EXTERNAL' DATA TYPES -----
 
-        /// Correctly sized private/secret key specific to the target parameter set.
+        /// Correctly sized private key specific to the target parameter set. <br>
+        /// Implements the [crate::traits::Signer] and [crate::traits::SerDes] traits.
         #[derive(Zeroize, ZeroizeOnDrop)]
         pub struct PrivateKey([u8; SK_LEN]);
 
 
-        /// Correctly sized public key specific to the target parameter set.
+        /// Correctly sized public key specific to the target parameter set. <br>
+        /// Implements the [crate::traits::Verifier] and [crate::traits::SerDes] traits.
         #[derive(Zeroize, ZeroizeOnDrop)]
         pub struct PublicKey([u8; PK_LEN]);
 
 
-        /// Correctly sized public key specific to the target parameter set.
+        /// Correctly sized signature specific to the target parameter set. <br>
+        /// Implements the [crate::traits::SerDes] trait.
         #[derive(Zeroize, ZeroizeOnDrop)]
         pub struct Signature([u8; SIG_LEN]);
 
 
-        /// Empty struct to implement `KeyGen` trait
+        /// Empty struct to enable `KeyGen` trait objects. <br>
+        /// Implements the [crate::traits::KeyGen] trait.
         #[derive(Zeroize, ZeroizeOnDrop)]
         pub struct KG(); // Arguable how useful an empty struct+trait is...
 
 
         // ----- PRIMARY FUNCTIONS ---
 
-        /// Generates public and private (secret) key pair
-        /// Returns an error when the random number generator fails
+        /// Generates a public and private key pair specific to this security parameter set. <br>
+        /// This function utilizes the OS default random number generator.
         /// # Errors
-        /// Returns an error when random number generator fails
-        pub fn key_gen() -> Result<(PublicKey, PrivateKey), &'static str> {
-            KG::key_gen_with_rng(&mut OsRng)
+        /// Returns an error when random number generator fails.
+        #[cfg(feature = "default-rng")]
+        pub fn try_keygen() -> Result<(PublicKey, PrivateKey), &'static str> { KG::try_keygen() }
+
+        /// Generates a public and private key pair specific to this security parameter set. <br>
+        /// This function utilizes a supplied random number generator.
+        /// # Errors
+        /// Returns an error when random number generator fails.
+        pub fn try_keygen_with_rng(
+            rng: &mut impl CryptoRngCore,
+        ) -> Result<(PublicKey, PrivateKey), &'static str> {
+            KG::try_keygen_with_rng(rng)
         }
 
 
@@ -78,10 +89,7 @@ macro_rules! functionality {
             type PrivateKey = PrivateKey;
             type PublicKey = PublicKey;
 
-            /// Docstring here!?!?
-            /// # Errors
-            /// Returns an error when random number generator fails
-            fn key_gen_with_rng(
+            fn try_keygen_with_rng(
                 rng: &mut impl CryptoRngCore,
             ) -> Result<(PublicKey, PrivateKey), &'static str> {
                 let (pk, sk) = ml_dsa::key_gen::<ETA, K, L, PK_LEN, SK_LEN>(rng)?;
@@ -117,7 +125,7 @@ macro_rules! functionality {
         impl Verifier for PublicKey {
             type Signature = Signature;
 
-            fn verify(&self, message: &[u8], sig: &Signature) -> Result<bool, &'static str> {
+            fn try_verify(&self, message: &[u8], sig: &Signature) -> Result<bool, &'static str> {
                 ml_dsa::verify::<BETA, GAMMA1, GAMMA2, K, L, LAMBDA, OMEGA, PK_LEN, SIG_LEN, TAU>(
                     &self.0, &message, &sig.0,
                 )
@@ -130,6 +138,7 @@ macro_rules! functionality {
         impl SerDes for Signature {
             type ByteArray = [u8; SIG_LEN];
 
+            // TODO: perhaps slice reference then test length immed
             fn try_from_bytes(sig: Self::ByteArray) -> Result<Self, &'static str> {
                 if sig[0] == sig[1] {
                     return Err("Signature deserialization failed"); // Placeholder for validation
@@ -144,6 +153,7 @@ macro_rules! functionality {
         impl SerDes for PublicKey {
             type ByteArray = [u8; PK_LEN];
 
+            // TODO: perhaps slice reference then test length immed
             fn try_from_bytes(pk: Self::ByteArray) -> Result<Self, &'static str> {
                 if pk[0] == pk[1] {
                     return Err("PublicKey deserialization failed"); // Placeholder for validation
@@ -158,6 +168,7 @@ macro_rules! functionality {
         impl SerDes for PrivateKey {
             type ByteArray = [u8; SK_LEN];
 
+            // TODO: perhaps slice reference then test length immed
             fn try_from_bytes(sk: Self::ByteArray) -> Result<Self, &'static str> {
                 if sk[0] == sk[1] {
                     return Err("PrivateKey deserialization failed"); // Placeholder for validation
@@ -173,7 +184,25 @@ macro_rules! functionality {
 
 // Regarding private key sizes, see https://groups.google.com/a/list.nist.gov/g/pqc-forum/c/EKoI0u_PuOw/m/b02zPvomBAAJ
 
-/// ML-DSA-44 documentation here
+/// Functionality for the ML-DSA-44 security parameter set. This includes specific sizes for the
+/// public key, secret key, and signature along with a number of internal constants. The ML-DSA-44
+/// parameter set is claimed to be in security strength category 2.
+///
+/// The basic usage is for an originator to start with the [ml_dsa_44::try_keygen] function below to
+/// generate both [ml_dsa_44::PublicKey] and [ml_dsa_44::PrivateKey] structs. The resulting
+/// [ml_dsa_44::PrivateKey] struct implements the [traits::Signer] trait which supplies a variety of
+/// functions to sign byte-array messages, such as [traits::Signer::try_sign()].
+///
+/// All three (`PrivateKey`, `PublicKey`and `Signature`) structs implement the [traits::SerDes]
+/// trait. The originator utilizes the [traits::SerDes::into_bytes()] functions to serialize the
+/// latter two structs into byte-arrays for transmission with the message. Upon receipt, the remote
+/// party utilizes the [traits::SerDes::try_from_bytes()] functions to deserialize these byte-arrays
+/// into structs.
+///
+/// Finally, the remote party uses the [traits::Verifier::try_verify()] function implemented on the
+/// [ml_dsa_44::PublicKey] struct to verify the message with its [ml_dsa_44::Signature] struct.
+///
+/// See the top-level [crate] documentation for example code that implements the above flow.
 pub mod ml_dsa_44 {
     use super::QU;
     const TAU: usize = 39;
@@ -185,14 +214,19 @@ pub mod ml_dsa_44 {
     const ETA: usize = 2;
     const BETA: u32 = (TAU * ETA) as u32;
     const OMEGA: usize = 80;
-    const SK_LEN: usize = 2560;
-    const PK_LEN: usize = 1312;
-    const SIG_LEN: usize = 2420;
+    /// Private (secret) key length in bytes.
+    pub const SK_LEN: usize = 2560;
+    /// Public key length in bytes.
+    pub const PK_LEN: usize = 1312;
+    /// Signature length in bytes.
+    pub const SIG_LEN: usize = 2420;
 
     functionality!();
 }
 
-/// ML-DSA-65 documentation here
+/// Functionality for the ML-DSA-65 security parameter set. This includes specific sizes for the
+/// public key, secret key, and signature along with a number of internal constants. The ML-DSA-65
+/// parameter set is claimed to be in security strength category 3.
 pub mod ml_dsa_65 {
     use super::QU;
     const TAU: usize = 49;
@@ -204,15 +238,20 @@ pub mod ml_dsa_65 {
     const ETA: usize = 4;
     const BETA: u32 = (TAU * ETA) as u32;
     const OMEGA: usize = 55;
-    const SK_LEN: usize = 4032;
-    const PK_LEN: usize = 1952;
-    const SIG_LEN: usize = 3309;
+    /// Private (secret) key length in bytes.
+    pub const SK_LEN: usize = 4032;
+    /// Public key length in bytes.
+    pub const PK_LEN: usize = 1952;
+    /// Signature length in bytes.
+    pub const SIG_LEN: usize = 3309;
 
     functionality!();
 }
 
 
-/// ML-DSA-87 documentation here
+/// Functionality for the ML-DSA-87 security parameter set. This includes specific sizes for the
+/// public key, secret key, and signature along with a number of internal constants. The ML-DSA-87
+/// parameter set is claimed to be in security strength category 5.
 pub mod ml_dsa_87 {
     use super::QU;
     const TAU: usize = 60;

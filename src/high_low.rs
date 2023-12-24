@@ -16,12 +16,6 @@ pub(crate) fn power2round(r: Zq) -> (Zq, Zq) {
     let rp = r.rem_euclid(QU as i32); // % (QU as i32);
 
     // 2: r0 ← r+ mod±2^d
-    // let x1 = rp & (2i32.pow(D) - 1);
-    // let r0 = if x1 < 2i32.pow(D - 1) {
-    //     x1
-    // } else {
-    //     (x1 - 2i32.pow(D - 1)).rem_euclid(QI) // % QI
-    // };
     let r0 = mod_pm(rp, 2_u32.pow(D));
     //
     // 3: return ((r+ − r0)/2^d, r0)
@@ -29,21 +23,19 @@ pub(crate) fn power2round(r: Zq) -> (Zq, Zq) {
     (r1, r0)
 }
 
+
 /// Algorithm 30 Decompose(r) on page 34.
 /// Decomposes r into (r1, r0) such that r ≡ r1(2γ2) + r0 mod q.
 pub(crate) fn decompose<const GAMMA2: usize>(r: Zq, r1: &mut Zq, r0: &mut Zq) {
     // Input: r ∈ Zq
     // Output: Integers (r1, r0).
+
     // 1: r+ ← r mod q
     let rp = r.rem_euclid(QI);
+
     // 2: r0 ← r+ mod±(2γ_2)
     *r0 = mod_pm(rp, 2 * GAMMA2 as u32);
-    // let x1 = rp.rem_euclid(2 * GAMMA2 as i32);
-    // *r0 = if x1 <= (GAMMA2) as i32 {
-    //     x1
-    // } else {
-    //     2 * GAMMA2 as i32 - x1
-    // };
+
     // 3: if r+ − r0 = q − 1 then
     if (rp - *r0) == (QU as i32 - 1) {
         // 4: r1 ← 0
@@ -62,9 +54,11 @@ pub(crate) fn decompose<const GAMMA2: usize>(r: Zq, r1: &mut Zq, r0: &mut Zq) {
 pub(crate) fn high_bits<const GAMMA2: usize>(r: Zq) -> Zq {
     // Input: r ∈ Zq
     // Output: Integer r1.
+
     // 1: (r1, r0) ← Decompose(r)
     let (mut r1, mut r0) = (0, 0);
     decompose::<GAMMA2>(r, &mut r1, &mut r0);
+
     // 2: return r1
     r1
 }
@@ -75,22 +69,28 @@ pub(crate) fn high_bits<const GAMMA2: usize>(r: Zq) -> Zq {
 pub(crate) fn low_bits<const GAMMA2: usize>(r: Zq) -> Zq {
     // Input: r ∈ Zq
     // Output: Integer r0.
+
     // 1: (r1, r0) ← Decompose(r)
     let (mut r1, mut r0) = (0, 0);
     decompose::<GAMMA2>(r, &mut r1, &mut r0);
+
     // 2: return r0
     r0
 }
+
 
 /// Algorithm 33 MakeHint(z, r) on page 35.
 /// Compute hint bit indicating whether adding z to r alters the high bits of r.
 pub(crate) fn make_hint<const GAMMA2: usize>(z: Zq, r: Zq) -> bool {
     // Input: z, r ∈ Zq
     // Output: Boolean
+
     // 1: r1 ← HighBits(r)
     let r1 = high_bits::<GAMMA2>(r);
+
     // 2: v1 ← HighBits(r + z)
     let v1 = high_bits::<GAMMA2>((r + z).rem_euclid(QI));
+
     // 3: return [[r1 != v1]]
     r1 != v1
 }

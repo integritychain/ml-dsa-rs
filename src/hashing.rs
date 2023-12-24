@@ -67,6 +67,7 @@ pub(crate) fn sample_in_ball<const TAU: usize>(rho: &[u8; 32]) -> R {
         c[j as usize] = (0 - 1i32).pow((shifted % 2 == 1) as u32);
 
         // 10: k ← k + 1   (implicit)
+        //
     } // 11: end for
 
     debug_assert!(c.iter().filter(|e| e.abs() == 1).count() == TAU);
@@ -143,15 +144,7 @@ pub(crate) fn rej_bounded_poly<const ETA: usize>(rhos: &[&[u8]], a: &mut R) {
         if let Some(x) = z0 {
             a[j] = x;
             j += 1;
-        //}
-        // if z0.is_some() {
-        //     //
-        //     // 8: aj ← z0
-        //     a[j] = z0.unwrap();
-        //
-        //     // 9: j ← j + 1
-        //     j += 1;
-        //     //
+            //
         } // 10: end if
           //
           // 11: if z1 != ⊥ and j < 256 then
@@ -225,12 +218,8 @@ pub(crate) fn expand_s<const ETA: usize, const K: usize, const L: usize>(
         //
     } // 6: end for
       //
-    debug_assert!(s1
-        .iter()
-        .all(|r| r.iter().all(|&c| (c >= -(ETA as i32)) & (c <= ETA as i32))));
-    debug_assert!(s2
-        .iter()
-        .all(|r| r.iter().all(|&c| (c >= -(ETA as i32)) & (c <= ETA as i32))));
+    debug_assert!(s1.iter().all(|r| r.iter().all(|&c| (c >= -(ETA as i32)) & (c <= ETA as i32))));
+    debug_assert!(s2.iter().all(|r| r.iter().all(|&c| (c >= -(ETA as i32)) & (c <= ETA as i32))));
     (s1, s2) // 7: return (s_1 , s_2)
 }
 
@@ -251,7 +240,7 @@ pub(crate) fn expand_mask<const GAMMA1: usize, const L: usize>(rho: &[u8; 64], m
     for r in 0..L {
         //
         // 3: n ← IntegerToBits(µ + r, 16)
-        debug_assert!((mu < 128) & (r < 128));
+        debug_assert!((mu + (r as u32) < 256));
         let n = mu as u16 + r as u16;
 
         // 4: v ← (H(ρ||n)[[32rc]], H(ρ||n)[[32rc+1]], ... , H(ρ||n)[[32rc+32c − 1]])
@@ -261,9 +250,9 @@ pub(crate) fn expand_mask<const GAMMA1: usize, const L: usize>(rho: &[u8; 64], m
         // 5: s[r] ← BitUnpack(v, γ1 − 1, γ1)
         s[r] = conversion::bit_unpack(&v[0..32 * c], GAMMA1 as u32 - 1, GAMMA1 as u32).unwrap();
 
-        debug_assert!(s.iter().all(|r| r
+        debug_assert!(s
             .iter()
-            .all(|&c| (c > -(GAMMA1 as i32)) & (c <= GAMMA1 as i32))));
+            .all(|r| r.iter().all(|&c| (c > -(GAMMA1 as i32)) & (c <= GAMMA1 as i32))));
     } // 6: end for
 
     // 7: return s

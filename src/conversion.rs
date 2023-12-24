@@ -9,9 +9,8 @@ use crate::QI;
 /// Algorithm 4 IntegerToBits(x, alpha) on page 20.
 /// Computes the base-2 representation of x mod 2^{alpha} (using in little-endian order).
 /// This function will soon be optimized away.
-//pub(crate) fn integer_to_bits(x: u32, alpha: usize, y_bits: &mut [bool]) {
 pub(crate) fn integer_to_bits(x: i32, alpha: usize, y_bits: &mut [bool]) {
-    // Input: A nonnegative integer x and a positive integer alpha.
+    // Input: A non-negative integer x and a positive integer alpha.
     // Output: A bit string y of length alpha.
     debug_assert_eq!(y_bits.len(), alpha);
     let mut xx = x as u32;
@@ -27,6 +26,7 @@ pub(crate) fn integer_to_bits(x: i32, alpha: usize, y_bits: &mut [bool]) {
         xx >>= 1;
         //
     } // 4: end for
+      //
 } // 5: return y
 
 
@@ -74,6 +74,7 @@ pub(crate) fn bits_to_bytes(y_bits: &[bool], z_bytes: &mut [u8]) {
         z_bytes[i / 8] += y_bits[i] as u8 * 2u8.pow((i % 8) as u32);
         //
     } // 4: end for
+      //
 } // 5: return z
 
 
@@ -101,7 +102,9 @@ pub(crate) fn bytes_to_bits(z_bytes: &[u8], y_bits: &mut [bool]) {
             z_i >>= 1;
             //
         } // 5: end for
+          //
     } // 6: end for
+      //
 } // 7: return y
 
 
@@ -122,9 +125,11 @@ pub(crate) fn coef_from_three_bytes(bbb: [u8; 3]) -> Option<i32> {
     // 5: if z < q then return z
     if z < QI {
         Some(z)
+        //
     } else {
         // 6: else return ⊥
         None
+        //
     } // 7: end if
 }
 
@@ -135,8 +140,8 @@ pub(crate) fn coef_from_half_byte<const ETA: usize>(b: u8) -> Option<i32> {
     // Input: Integer b ∈{0, 1, ... , 15}.
     // Output: An integer between −η and η, or ⊥.
     debug_assert!(b <= 15);
-    #[allow(clippy::redundant_else)]
 
+    #[allow(clippy::redundant_else)]
     // 1: if η = 2 and b < 15 then return 2 − (b mod 5)
     if (ETA == 2) & (b < 15) {
         Some(2 - (b % 5) as i32)
@@ -153,6 +158,7 @@ pub(crate) fn coef_from_half_byte<const ETA: usize>(b: u8) -> Option<i32> {
             None
             //
         } // 5: end if
+          //
     } // 6: end if
 }
 
@@ -209,7 +215,8 @@ pub(crate) fn bit_pack(w: &R, a: u32, b: u32, bytes_out: &mut [u8]) {
         //
     } // 4: end for
 
-    bits_to_bytes(&z, bytes_out); // 5: return BitsToBytes(z)
+    // 5: return BitsToBytes(z)
+    bits_to_bytes(&z, bytes_out);
 
     // Test...
     let mut bytes_tst = vec![0u8; bytes_out.len()];
@@ -218,7 +225,7 @@ pub(crate) fn bit_pack(w: &R, a: u32, b: u32, bytes_out: &mut [u8]) {
     bytes_out.copy_from_slice(&bytes_tst);
 }
 
-
+/// An optimized bit_pack that does not utilize integer_to_bits or bits_to_bytes
 pub(crate) fn bit_pack2(w: &R, a: u32, b: u32, bytes_out: &mut [u8]) {
     debug_assert!((a < u32::MAX / 4) & (b < u32::MAX / 4) & (b >= a)); // Ensure some headroom
     let bitlen = bitlen((a + b) as usize); // Calculate element bit length
@@ -270,9 +277,7 @@ pub(crate) fn simple_bit_unpack(v: &[u8], b: u32) -> Result<R, &'static str> {
         w_out[i] = bits_to_integer(&z[i * c..(i + 1) * c]);
         //
     } // 5: end for
-    debug_assert!(w_out
-        .iter()
-        .all(|e| ((*e >= 0) & (*e < 2i32.pow(c as u32))))); // Correct range
+    debug_assert!(w_out.iter().all(|e| ((*e >= 0) & (*e < 2i32.pow(c as u32))))); // Correct range
 
     // Test...
     let mut w_tst = [0i32; 256];
@@ -322,10 +327,7 @@ pub(crate) fn bit_unpack(v: &[u8], a: u32, b: u32) -> Result<R, &'static str> {
     bit_unpack2(v, a, b, &mut w_tst);
     assert_eq!(w_out, w_tst);
 
-    if w_out
-        .iter()
-        .all(|e| ((*e >= -(a as i32)) & (*e <= b as i32)))
-    {
+    if w_out.iter().all(|e| ((*e >= -(a as i32)) & (*e <= b as i32))) {
         Ok(w_out)
     } else {
         Err("Invalid bit_unpack deserialization")
@@ -366,9 +368,7 @@ pub(crate) fn hint_bit_pack<const K: usize, const OMEGA: usize>(h: &[R; K], y_by
     // Output: A byte string y of length ω + k.
     let k = h.len();
     debug_assert_eq!(y_bytes.len(), OMEGA + k);
-    debug_assert!(h
-        .iter()
-        .all(|&r| r.iter().filter(|&&e| e == 1).sum::<i32>() <= OMEGA as i32));
+    debug_assert!(h.iter().all(|&r| r.iter().filter(|&&e| e == 1).sum::<i32>() <= OMEGA as i32));
 
     // 1: y ∈ Bω+k ← 0ω+k
     y_bytes.iter_mut().for_each(|e| *e = 0);
@@ -392,12 +392,14 @@ pub(crate) fn hint_bit_pack<const K: usize, const OMEGA: usize>(h: &[R; K], y_by
                 index += 1;
                 //
             } // 8: end if
+              //
         } // 9: end for
 
         // 10: y[ω + i] ← Index ▷ Store the value of Index after processing h[i]
         y_bytes[OMEGA + i] = index as u8;
         //
     } // 11: end for
+      //
 } // 12: return y
 
 
@@ -436,6 +438,7 @@ pub(crate) fn hint_bit_unpack<const K: usize, const OMEGA: usize>(
             index += 1;
             //
         } // 9: end while
+          //
     } // 10: end for
 
     // 11: while Index < ω do
@@ -453,6 +456,7 @@ pub(crate) fn hint_bit_unpack<const K: usize, const OMEGA: usize>(
         //
     } // 15: end while
     *h = Some(hh);
+    //
 } // 16: return h
 
 

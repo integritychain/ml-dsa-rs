@@ -1,27 +1,5 @@
-//#![allow(dead_code)]
-
 use crate::types::{Rq, Zero, R, T};
-use crate::{QI, QU, ZETA}; // 8: return (r1, r0)
-
-/// HAC Algorithm 14.76 Right-to-left binary exponentiation mod Q.
-#[must_use]
-#[allow(clippy::cast_possible_truncation)]
-pub(crate) fn pow_mod_q(g: i32, e: u8) -> i32 {
-    let g = g as i64;
-    let mut result = 1;
-    let mut s = g;
-    let mut e = e;
-    while e != 0 {
-        if e & 1 != 0 {
-            result = (result * s).rem_euclid(QI as i64);
-        };
-        e >>= 1;
-        if e != 0 {
-            s = (s * s).rem_euclid(QU as i64);
-        };
-    }
-    result.rem_euclid(QI as i64) as i32
-}
+use crate::{helpers, QI, QU, ZETA};
 
 
 /// Algorithm 35 NTT(w) on page 36.
@@ -33,15 +11,11 @@ pub(crate) fn ntt(w: &R) -> T {
     let mut w_hat = R::zero(); // Note: this should be T ... will fix when impl struct
 
     // 1: for j from 0 to 255 do
+    // 2: w_hat[j] ← w_j
+    // 3: end for
     w_hat[..=255].copy_from_slice(&w[..=255]);
-    // for j in 0..=255 {
-    //     //
-    //     // 2: w_hat[j] ← w_j
-    //     w_hat[j] = w[j];
-    //    //
-    // } // 3: end for
-      //
-      // 4: k ← 0
+    //
+    // 4: k ← 0
     let mut k = 0;
     //
     // 5: len ← 128
@@ -60,7 +34,7 @@ pub(crate) fn ntt(w: &R) -> T {
             k += 1;
 
             // 10: zeta ← ζ^{brv(k)} mod q
-            let zeta = pow_mod_q(ZETA, (k as u8).reverse_bits()) as i64; // >> 1) as i64;
+            let zeta = helpers::pow_mod_q(ZETA, (k as u8).reverse_bits()) as i64; // >> 1) as i64;
 
             // 11: for j from start to start + len − 1 do
             for j in start..(start + len) {
@@ -89,12 +63,11 @@ pub(crate) fn inv_ntt(w_hat: &T) -> R {
     let mut w = R::zero();
 
     // 1: for j from 0 to 255 do
+    // 2: w_j ← w_hat[j]
+    // 3: end for
     w[..=255].copy_from_slice(&w_hat[..=255]);
-    // for j in 0..=255 {
-    //     // 2: w_j ← w_hat[j]
-    //     w[j] = w_hat[j];
-    // } // 3: end for
-      // 4: k ← 256
+
+    // 4: k ← 256
     let mut k = 256;
     // 5: len ← 1
     let mut len = 1;
@@ -107,8 +80,8 @@ pub(crate) fn inv_ntt(w_hat: &T) -> R {
             // 9: k ← k−1
             k -= 1;
             // 10: zeta ← −ζ^{brv(k)} mod q
-            let zeta = - pow_mod_q(ZETA, (k as u8).reverse_bits()); // TODO: reconfirm interpretation of -1 precedence
-                                                                       // 11: for j from start to start + len − 1 do
+            let zeta = -helpers::pow_mod_q(ZETA, (k as u8).reverse_bits());
+            // 11: for j from start to start + len − 1 do
             for j in start..(start + len) {
                 // 12: t ← w_j
                 let t = w[j];
@@ -126,8 +99,8 @@ pub(crate) fn inv_ntt(w_hat: &T) -> R {
         len *= 2;
     } // 20: end while
       // 21: f ← 8347681          ▷ f = 256^{−1} mod q
-    let f = 8_347_681_i64; // TODO: recheck type size/boundaries
-                            // 22: for j from 0 to 255 do
+    let f = 8_347_681_i64;
+    // 22: for j from 0 to 255 do
     #[allow(clippy::needless_range_loop)]
     for j in 0..=255 {
         // 23: wj ← f ·wj

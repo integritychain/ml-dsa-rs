@@ -27,17 +27,14 @@ pub(crate) fn pk_encode<const K: usize, const PK_LEN: usize>(
     for i in 0..K {
         //
         // 3: pk ← pk || SimpleBitPack (t1[i], 2^{bitlen(q−1)−d}-1)
-        // simple_bit_pack(
-        //     &t1[i],
-        //     2u32.pow(bl as u32) - 1,
-        //     &mut pk[32 + 32 * i * bl..32 + 32 * (i + 1) * bl],
-        // );
         simple_bit_pack(
             &t1[i],
             2u32.pow(bl as u32) - 1,
             &mut pk[32 + 32 * i * bl..32 + 32 * (i + 1) * bl],
         );
+        //
     } // 4: end for
+      //
     pk // 5: return pk
 }
 
@@ -69,10 +66,11 @@ pub(crate) fn pk_decode<const K: usize, const PK_LEN: usize>(
         )?;
         //
     } // 5: end for
-    debug_assert!(t1
-        .iter()
-        .all(|r| r.iter().all(|e| (*e >= 0) & (*e < 2i32.pow(bl as u32)))));
-    Ok((rho, t1)) // 6: return (ρ, t1 )
+      //
+    debug_assert!(t1.iter().all(|r| r.iter().all(|e| (*e >= 0) & (*e < 2i32.pow(bl as u32)))));
+
+    // 6: return (ρ, t1 )
+    Ok((rho, t1))
 }
 
 
@@ -94,17 +92,11 @@ pub fn sk_encode<
     // Output: Private key, sk ∈ B^{32+32+64+32·((k+ℓ)·bitlen(2η)+dk)}
     let mut sk = [0u8; SK_LEN];
 
-    let (c_min, c_max) = (- (ETA as i32), ETA as i32);
-    debug_assert!(s1
-        .iter()
-        .all(|r| r.iter().all(|c| (*c >= c_min) & (*c <= c_max))));
-    debug_assert!(s2
-        .iter()
-        .all(|r| r.iter().all(|c| (*c >= c_min) & (*c <= c_max))));
+    let (c_min, c_max) = (-(ETA as i32), ETA as i32);
+    debug_assert!(s1.iter().all(|r| r.iter().all(|c| (*c >= c_min) & (*c <= c_max))));
+    debug_assert!(s2.iter().all(|r| r.iter().all(|c| (*c >= c_min) & (*c <= c_max))));
     let (c_min, c_max) = (-(2i32.pow(D as u32 - 1)) + 1, 2i32.pow(D as u32 - 1));
-    debug_assert!(t0
-        .iter()
-        .all(|r| r.iter().all(|c| (*c >= c_min) & (*c <= c_max))));
+    debug_assert!(t0.iter().all(|r| r.iter().all(|c| (*c >= c_min) & (*c <= c_max))));
     debug_assert_eq!(sk.len(), 32 + 32 + 64 + 32 * ((K + L) * bitlen(2 * ETA) + D * K));
 
     // 1: sk ← BitsToBytes(ρ) || BitsToBytes(K) || BitsToBytes(tr)
@@ -118,12 +110,7 @@ pub fn sk_encode<
     for i in 0..L {
         //
         // 3: sk ← sk || BitPack (s1[i], η, η)
-        bit_pack(
-            &s1[i],
-            ETA as u32,
-            ETA as u32,
-            &mut sk[start + i * step..start + (i + 1) * step],
-        );
+        bit_pack(&s1[i], ETA as u32, ETA as u32, &mut sk[start + i * step..start + (i + 1) * step]);
         //
     } // 4: end for
       //
@@ -132,12 +119,7 @@ pub fn sk_encode<
     for i in 0..K {
         //
         // 6: sk ← sk || BitPack (s2[i], η, η)
-        bit_pack(
-            &s2[i],
-            ETA as u32,
-            ETA as u32,
-            &mut sk[start + i * step..start + (i + 1) * step],
-        );
+        bit_pack(&s2[i], ETA as u32, ETA as u32, &mut sk[start + i * step..start + (i + 1) * step]);
         //
     } // 7: end for
 
@@ -229,127 +211,14 @@ pub(crate) fn sk_decode<
 
     // Note spec is not consistent on the range constraints for s1 and s2; this is tighter
     let (c_min, c_max) = (-(ETA as i32), ETA as i32);
-    let s1_ok = s1
-        .iter()
-        .all(|r| r.iter().all(|c| (*c >= c_min) & (*c <= c_max)));
-    let s2_ok = s2
-        .iter()
-        .all(|r| r.iter().all(|c| (*c >= c_min) & (*c <= c_max)));
+    let s1_ok = s1.iter().all(|r| r.iter().all(|c| (*c >= c_min) & (*c <= c_max)));
+    let s2_ok = s2.iter().all(|r| r.iter().all(|c| (*c >= c_min) & (*c <= c_max)));
     let (c_min, c_max) = (-(2i32.pow(D as u32 - 1)) + 1, 2i32.pow(D as u32 - 1));
-    let t0_ok = t0
-        .iter()
-        .all(|r| r.iter().all(|c| (*c >= c_min) & (*c <= c_max)));
+    let t0_ok = t0.iter().all(|r| r.iter().all(|c| (*c >= c_min) & (*c <= c_max)));
     if s1_ok & s2_ok & t0_ok {
         Ok((rho, k, tr, s1, s2, t0))
     } else {
         Err("Invalid sk_decode deserialization")
-    }
-}
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_pk_encode_decode_roundtrip1() {
-        // D=13 K=4 PK_LEN=1312
-        let mut random_pk = [0u8; 1312];
-        random_pk.iter_mut().for_each(|a| *a = rand::random::<u8>());
-        //let mut rho = [0u8; 32];
-        //let mut t1 = [[0i32; 256]; 4];
-        let (rho, t1) = pk_decode::<4, 1312>(&random_pk).unwrap();
-        //let mut res = [0u8; 1312];
-        let res = pk_encode::<4, 1312>(&rho, &t1);
-        assert_eq!(&random_pk[..], res);
-    }
-
-    #[test]
-    fn test_pk_encode_decode_roundtrip2() {
-        // D=13 K=6 PK_LEN=1952
-        let mut random_pk = [0u8; 1952];
-        random_pk.iter_mut().for_each(|a| *a = rand::random::<u8>());
-        //let mut rho = [0u8; 32];
-        //let mut t1 = [[0i32; 256]; 6];
-        let (rho, t1) = pk_decode::<6, 1952>(&random_pk.try_into().unwrap()).unwrap();
-        //let mut res = [0u8; 1952];
-        let res = pk_encode::<6, 1952>(&rho, &t1);
-        assert_eq!(random_pk, res);
-    }
-
-    #[test]
-    fn test_pk_encode_decode_roundtrip3() {
-        // D=13 K=8 PK_LEN=2592
-        let mut random_pk = [0u8; 2592];
-        random_pk.iter_mut().for_each(|a| *a = rand::random::<u8>());
-        //let mut rho = [0u8; 32];
-        //let mut t1 = [[0i32; 256]; 8];
-        let (rho, t1) = pk_decode::<8, 2592>(&random_pk.try_into().unwrap()).unwrap();
-        //let mut res = [0u8; 2592];
-        let res = pk_encode::<8, 2592>(&rho, &t1);
-        assert_eq!(random_pk, res);
-    }
-
-    fn get_vec(max: u32) -> [i32; 256] {
-        let mut rnd_r = [0i32; 256];
-        rnd_r
-            .iter_mut()
-            .for_each(|e| *e = rand::random::<i32>().rem_euclid(max as i32));
-        rnd_r
-    }
-
-    #[test]
-    fn test_sk_encode_decode_roundtrip1() {
-        // TODO: figure out how to best test this correctly
-        //  - should the skDecode function return a result (probably)
-        //  - double check the range of the input operands (most are +/- ETA, but last one is 2^d-1)
-        //  - maybe need to rework one/two of the conversion functions in a similar fashion
-
-        // D=13 ETA=2 K=4 L=4 SK_LEN=2560
-        let (rho, k) = (rand::random::<[u8; 32]>(), rand::random::<[u8; 32]>());
-        let mut tr = [0u8; 64];
-        tr.iter_mut().for_each(|e| *e = rand::random::<u8>());
-        let s1 = [get_vec(2), get_vec(2), get_vec(2), get_vec(2)];
-        let s2 = [get_vec(2), get_vec(2), get_vec(2), get_vec(2)];
-        let t0 = [
-            get_vec(2u32.pow(11)),
-            get_vec(2u32.pow(11)),
-            get_vec(2u32.pow(11)),
-            get_vec(2u32.pow(11)),
-        ];
-        //let mut sk = [0u8; 2560];
-        let sk = sk_encode::<13, 2, 4, 4, 2560>(&rho, &k, &tr, &s1, &s2, &t0);
-        let res = sk_decode::<13, 2, 4, 4, 2560>(&sk);
-        assert!(res.is_ok());
-        let (rho_test, k_test, tr_test, s1_test, s2_test, t0_test) = res.unwrap();
-
-        assert!(
-            (rho == rho_test)
-                & (k == k_test)
-                & (tr == tr_test)
-                & (s1 == s1_test)
-                & (s2 == s2_test)
-                & (t0 == t0_test)
-        );
-    }
-
-    #[test]
-    fn test_sig_roundtrip() {
-        // GAMMA1=2^17 K=4 L=4 LAMBDA=128 OMEGA=80
-        let c_tilde: Vec<u8> = (0..2 * 128 / 8).map(|_| rand::random::<u8>()).collect();
-        let z = [get_vec(2), get_vec(2), get_vec(2), get_vec(2)];
-        let h = [get_vec(1), get_vec(1), get_vec(1), get_vec(1)];
-        //let mut sigma = [0u8; 2420];
-        let sigma = sig_encode::<{ 2usize.pow(17) }, 4, 4, 128, 80, 2420>(&c_tilde, &z, &h);
-        // let mut c_test = [0u8; 2 * 128 / 8];
-        // let mut z_test = [[0i32; 256]; 4];
-        // let mut h_test = [[0i32; 256]; 4];
-        let (c_test, z_test, h_test) =
-            sig_decode::<{ 2usize.pow(17) }, 4, 4, 128, 80>(&sigma).unwrap();
-        //        assert!(res.is_ok());
-        assert_eq!(c_tilde[0..8], c_test[0..8]);
-        assert_eq!(z, z_test);
-        assert_eq!(h, h_test.unwrap());
     }
 }
 
@@ -374,7 +243,6 @@ pub(crate) fn sig_encode<
     debug_assert_eq!(sigma.len(), LAMBDA / 4 + L * 32 * (1 + bl) + OMEGA + K);
 
     // 1: σ ← BitsToBytes(c_tilde)
-    //bits_to_bytes(&c_tilde, &mut sigma[..2 * LAMBDA * 8]);
     sigma[..2 * LAMBDA / 8].copy_from_slice(c_tilde);
 
     // 2: for i from 0 to ℓ − 1 do
@@ -392,8 +260,8 @@ pub(crate) fn sig_encode<
         //
     } // 4: end for
 
-    hint_bit_pack::<K, OMEGA>(h, &mut sigma[start + L * step..]);
     // 5: σ ← σ || HintBitPack (h)
+    hint_bit_pack::<K, OMEGA>(h, &mut sigma[start + L * step..]);
     sigma
 }
 
@@ -452,9 +320,7 @@ pub(crate) fn w1_encode<const K: usize, const GAMMA2: usize>(w1: &[R; K], w1_til
     // Output: A bit string representation, w1_tilde ∈ {0,1}^{32k*bitlen((q-1)/(2γ2)−1).
     let qm12gm1 = (QU - 1) / (2 * GAMMA2 as u32) - 1;
     let bl = bitlen(qm12gm1 as usize);
-    debug_assert!(w1
-        .iter()
-        .all(|r| r.iter().all(|&c| (c >= 0) & (c <= qm12gm1 as i32))));
+    debug_assert!(w1.iter().all(|r| r.iter().all(|&c| (c >= 0) & (c <= qm12gm1 as i32))));
 
     // 1: w1_tilde ← ()
 
@@ -468,3 +334,108 @@ pub(crate) fn w1_encode<const K: usize, const GAMMA2: usize>(w1: &[R; K], w1_til
     } // 4: end for
       //
 } // 5: return w^tilde_1
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pk_encode_decode_roundtrip1() {
+        // D=13 K=4 PK_LEN=1312
+        let mut random_pk = [0u8; 1312];
+        random_pk.iter_mut().for_each(|a| *a = rand::random::<u8>());
+        //let mut rho = [0u8; 32];
+        //let mut t1 = [[0i32; 256]; 4];
+        let (rho, t1) = pk_decode::<4, 1312>(&random_pk).unwrap();
+        //let mut res = [0u8; 1312];
+        let res = pk_encode::<4, 1312>(&rho, &t1);
+        assert_eq!(&random_pk[..], res);
+    }
+
+    #[test]
+    fn test_pk_encode_decode_roundtrip2() {
+        // D=13 K=6 PK_LEN=1952
+        let mut random_pk = [0u8; 1952];
+        random_pk.iter_mut().for_each(|a| *a = rand::random::<u8>());
+        //let mut rho = [0u8; 32];
+        //let mut t1 = [[0i32; 256]; 6];
+        let (rho, t1) = pk_decode::<6, 1952>(&random_pk.try_into().unwrap()).unwrap();
+        //let mut res = [0u8; 1952];
+        let res = pk_encode::<6, 1952>(&rho, &t1);
+        assert_eq!(random_pk, res);
+    }
+
+    #[test]
+    fn test_pk_encode_decode_roundtrip3() {
+        // D=13 K=8 PK_LEN=2592
+        let mut random_pk = [0u8; 2592];
+        random_pk.iter_mut().for_each(|a| *a = rand::random::<u8>());
+        //let mut rho = [0u8; 32];
+        //let mut t1 = [[0i32; 256]; 8];
+        let (rho, t1) = pk_decode::<8, 2592>(&random_pk.try_into().unwrap()).unwrap();
+        //let mut res = [0u8; 2592];
+        let res = pk_encode::<8, 2592>(&rho, &t1);
+        assert_eq!(random_pk, res);
+    }
+
+    fn get_vec(max: u32) -> [i32; 256] {
+        let mut rnd_r = [0i32; 256];
+        rnd_r.iter_mut().for_each(|e| *e = rand::random::<i32>().rem_euclid(max as i32));
+        rnd_r
+    }
+
+    #[test]
+    fn test_sk_encode_decode_roundtrip1() {
+        // TODO: figure out how to best test this correctly
+        //  - should the skDecode function return a result (probably)
+        //  - double check the range of the input operands (most are +/- ETA, but last one is 2^d-1)
+        //  - maybe need to rework one/two of the conversion functions in a similar fashion
+
+        // D=13 ETA=2 K=4 L=4 SK_LEN=2560
+        let (rho, k) = (rand::random::<[u8; 32]>(), rand::random::<[u8; 32]>());
+        let mut tr = [0u8; 64];
+        tr.iter_mut().for_each(|e| *e = rand::random::<u8>());
+        let s1 = [get_vec(2), get_vec(2), get_vec(2), get_vec(2)];
+        let s2 = [get_vec(2), get_vec(2), get_vec(2), get_vec(2)];
+        let t0 = [
+            get_vec(2u32.pow(11)),
+            get_vec(2u32.pow(11)),
+            get_vec(2u32.pow(11)),
+            get_vec(2u32.pow(11)),
+        ];
+        //let mut sk = [0u8; 2560];
+        let sk = sk_encode::<13, 2, 4, 4, 2560>(&rho, &k, &tr, &s1, &s2, &t0);
+        let res = sk_decode::<13, 2, 4, 4, 2560>(&sk);
+        assert!(res.is_ok());
+        let (rho_test, k_test, tr_test, s1_test, s2_test, t0_test) = res.unwrap();
+
+        assert!(
+            (rho == rho_test)
+                & (k == k_test)
+                & (tr == tr_test)
+                & (s1 == s1_test)
+                & (s2 == s2_test)
+                & (t0 == t0_test)
+        );
+    }
+
+    #[test]
+    fn test_sig_roundtrip() {
+        // GAMMA1=2^17 K=4 L=4 LAMBDA=128 OMEGA=80
+        let c_tilde: Vec<u8> = (0..2 * 128 / 8).map(|_| rand::random::<u8>()).collect();
+        let z = [get_vec(2), get_vec(2), get_vec(2), get_vec(2)];
+        let h = [get_vec(1), get_vec(1), get_vec(1), get_vec(1)];
+        //let mut sigma = [0u8; 2420];
+        let sigma = sig_encode::<{ 2usize.pow(17) }, 4, 4, 128, 80, 2420>(&c_tilde, &z, &h);
+        // let mut c_test = [0u8; 2 * 128 / 8];
+        // let mut z_test = [[0i32; 256]; 4];
+        // let mut h_test = [[0i32; 256]; 4];
+        let (c_test, z_test, h_test) =
+            sig_decode::<{ 2usize.pow(17) }, 4, 4, 128, 80>(&sigma).unwrap();
+        //        assert!(res.is_ok());
+        assert_eq!(c_tilde[0..8], c_test[0..8]);
+        assert_eq!(z, z_test);
+        assert_eq!(h, h_test.unwrap());
+    }
+}
