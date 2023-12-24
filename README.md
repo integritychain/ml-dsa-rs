@@ -12,8 +12,9 @@ desktop, browser and embedded applications.
 This crate implements the FIPS 204 **draft** standard in pure Rust with minimal and mainstream dependencies. All 
 three security parameter sets are fully functional. The implementation does not require the standard library, e.g. 
 `#[no_std]`, has no heap allocations, e.g. no `alloc`, and exposes the `RNG` so will be suitable for the full range of 
-applications down to bare-metal. The API is nearly stabilized and significant performance optimizations are forthcoming.
-This crate will quickly follow any changes to FIPS 204 as they become available.
+applications down to bare-metal. The API is nearly stabilized and heavily biased towards safety and correctness; 
+performance optimizations will be implemented as the standard matures. This crate will quickly follow any changes to 
+FIPS 204 as they become available.
 
 See <https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.204.ipd.pdf> for a full description of the target functionality.
 
@@ -23,22 +24,27 @@ The functionality is extremely simple to use, as demonstrated by the following e
 // Use the desired target parameter set.
 use ml_dsa_rs::ml_dsa_44; // Could also be ml_dsa_65 or ml_dsa_87. 
 use crate::ml_dsa_rs::traits::{SerDes, Signer, Verifier};
+# use std::error::Error;
+#
+# fn main() -> Result<(), Box<dyn Error>> {
 
 let message = [0u8, 1, 2, 3, 4, 5, 6, 7];
 
 // Generate key pair and signature
-let (pk1, sk) = ml_dsa_44::try_keygen().unwrap();  // Generate both public and secret keys
-let sig1 = sk.try_sign(&message).unwrap(); // Use the secret key to generate message signature
+let (pk1, sk) = ml_dsa_44::try_keygen()?;  // Generate both public and secret keys
+let sig1 = sk.try_sign(&message)?; // Use the secret key to generate message signature
 
 // Serialize then send the public key, message and signature
 let (pk_send, msg_send, sig_send) = (pk1.into_bytes(), message, sig1.into_bytes());
 let (pk_recv, msg_recv, sig_recv) = (pk_send, msg_send, sig_send);
 
 // Deserialize the public key and signature, then verify
-let pk2 = ml_dsa_44::PublicKey::try_from_bytes(pk_recv).expect("PubKey deserialization failed");
-let sig2 = ml_dsa_44::Signature::try_from_bytes(sig_recv).expect("Sig deserialization failed");
-let v = pk2.try_verify(&msg_recv, &sig2).unwrap(); // Use the PubKey to verify message signature
-assert!(v);
+let pk2 = ml_dsa_44::PublicKey::try_from_bytes(pk_recv)?;
+let sig2 = ml_dsa_44::Signature::try_from_bytes(sig_recv)?;
+let v = pk2.try_verify(&msg_recv, &sig2)?; // Use the PubKey to verify message signature
+assert!(v); 
+# Ok(())
+# }
 ~~~
 
 The Rust [Documentation][docs-link] lives under each **Module** corresponding to the desired [security parameter](#modules)

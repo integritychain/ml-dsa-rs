@@ -99,11 +99,11 @@ pub(crate) fn rej_ntt_poly(rhos: &[&[u8]], a_hat: &mut T) {
         // 5: c ← c + 3  (implicit)
 
         // 6: if a_hat[j] != ⊥ then
-        if a_hat_j.is_none() {
+        if a_hat_j.is_err() {
             continue; // leave j alone and re-run
         }
         //
-        a_hat[j] = a_hat_j.unwrap(); // Good result, save it and carry on
+        a_hat[j] = a_hat_j.unwrap() as i32; // Good result, save it and carry on
 
         // 7: j ← j + 1
         j += 1;
@@ -141,7 +141,7 @@ pub(crate) fn rej_bounded_poly<const ETA: usize>(rhos: &[&[u8]], a: &mut R) {
         let z1 = conversion::coef_from_half_byte::<ETA>(z[0] / 16);
 
         // 7: if z0 != ⊥ then
-        if let Some(x) = z0 {
+        if let Ok(x) = z0 {
             a[j] = x;
             j += 1;
             //
@@ -149,7 +149,7 @@ pub(crate) fn rej_bounded_poly<const ETA: usize>(rhos: &[&[u8]], a: &mut R) {
           //
           // 11: if z1 != ⊥ and j < 256 then
         #[allow(clippy::unnecessary_unwrap)]
-        if z1.is_some() & (j < 256) {
+        if z1.is_ok() & (j < 256) {
             //
             // 12: aj ← z1
             a[j] = z1.unwrap();
@@ -240,7 +240,7 @@ pub(crate) fn expand_mask<const GAMMA1: usize, const L: usize>(rho: &[u8; 64], m
     for r in 0..L {
         //
         // 3: n ← IntegerToBits(µ + r, 16)
-        debug_assert!((mu + (r as u32) < 256));
+        debug_assert!((mu + (r as u32) < 512));
         let n = mu as u16 + r as u16;
 
         // 4: v ← (H(ρ||n)[[32rc]], H(ρ||n)[[32rc+1]], ... , H(ρ||n)[[32rc+32c − 1]])

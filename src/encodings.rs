@@ -31,7 +31,7 @@ pub(crate) fn pk_encode<const K: usize, const PK_LEN: usize>(
             &t1[i],
             2u32.pow(bl as u32) - 1,
             &mut pk[32 + 32 * i * bl..32 + 32 * (i + 1) * bl],
-        );
+        ).unwrap();
         //
     } // 4: end for
       //
@@ -110,7 +110,7 @@ pub fn sk_encode<
     for i in 0..L {
         //
         // 3: sk ← sk || BitPack (s1[i], η, η)
-        bit_pack(&s1[i], ETA as u32, ETA as u32, &mut sk[start + i * step..start + (i + 1) * step]);
+        bit_pack(&s1[i], ETA as u32, ETA as u32, &mut sk[start + i * step..start + (i + 1) * step]).unwrap();
         //
     } // 4: end for
       //
@@ -119,7 +119,7 @@ pub fn sk_encode<
     for i in 0..K {
         //
         // 6: sk ← sk || BitPack (s2[i], η, η)
-        bit_pack(&s2[i], ETA as u32, ETA as u32, &mut sk[start + i * step..start + (i + 1) * step]);
+        bit_pack(&s2[i], ETA as u32, ETA as u32, &mut sk[start + i * step..start + (i + 1) * step]).unwrap();
         //
     } // 7: end for
 
@@ -134,7 +134,7 @@ pub fn sk_encode<
             2u32.pow(D as u32 - 1) - 1, // orginally a negative# + 1; now positive # - 1
             2u32.pow(D as u32 - 1),
             &mut sk[start + i * step..start + (i + 1) * step],
-        );
+        ).unwrap();
         //
     } // 10: end for
     debug_assert_eq!(start + K * step, sk.len());
@@ -256,7 +256,7 @@ pub(crate) fn sig_encode<
             GAMMA1 as u32 - 1,
             GAMMA1 as u32,
             &mut sigma[start + i * step..start + (i + 1) * step],
-        );
+        ).unwrap();
         //
     } // 4: end for
 
@@ -329,7 +329,7 @@ pub(crate) fn w1_encode<const K: usize, const GAMMA2: usize>(w1: &[R; K], w1_til
     for i in 0..K {
         //
         // 3: w1_tilde ← w1_tilde || BytesToBits (SimpleBitPack (w1[i], (q − 1)/(2γ2) − 1))
-        simple_bit_pack(&w1[i], qm12gm1, &mut w1_tilde[i * step..(i + 1) * step]);
+        simple_bit_pack(&w1[i], qm12gm1, &mut w1_tilde[i * step..(i + 1) * step]).unwrap();
         //
     } // 4: end for
       //

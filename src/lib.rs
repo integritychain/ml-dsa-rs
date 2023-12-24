@@ -42,25 +42,25 @@ macro_rules! functionality {
         // ----- 'EXTERNAL' DATA TYPES -----
 
         /// Correctly sized private key specific to the target parameter set. <br>
-        /// Implements the [crate::traits::Signer] and [crate::traits::SerDes] traits.
+        /// Implements the [`crate::traits::Signer`] and [`crate::traits::SerDes`] traits.
         #[derive(Zeroize, ZeroizeOnDrop)]
         pub struct PrivateKey([u8; SK_LEN]);
 
 
         /// Correctly sized public key specific to the target parameter set. <br>
-        /// Implements the [crate::traits::Verifier] and [crate::traits::SerDes] traits.
+        /// Implements the [`crate::traits::Verifier`] and [`crate::traits::SerDes`] traits.
         #[derive(Zeroize, ZeroizeOnDrop)]
         pub struct PublicKey([u8; PK_LEN]);
 
 
         /// Correctly sized signature specific to the target parameter set. <br>
-        /// Implements the [crate::traits::SerDes] trait.
+        /// Implements the [`crate::traits::SerDes`] trait.
         #[derive(Zeroize, ZeroizeOnDrop)]
         pub struct Signature([u8; SIG_LEN]);
 
 
         /// Empty struct to enable `KeyGen` trait objects. <br>
-        /// Implements the [crate::traits::KeyGen] trait.
+        /// Implements the [`crate::traits::KeyGen`] trait.
         #[derive(Zeroize, ZeroizeOnDrop)]
         pub struct KG(); // Arguable how useful an empty struct+trait is...
 
@@ -188,19 +188,19 @@ macro_rules! functionality {
 /// public key, secret key, and signature along with a number of internal constants. The ML-DSA-44
 /// parameter set is claimed to be in security strength category 2.
 ///
-/// The basic usage is for an originator to start with the [ml_dsa_44::try_keygen] function below to
-/// generate both [ml_dsa_44::PublicKey] and [ml_dsa_44::PrivateKey] structs. The resulting
-/// [ml_dsa_44::PrivateKey] struct implements the [traits::Signer] trait which supplies a variety of
-/// functions to sign byte-array messages, such as [traits::Signer::try_sign()].
+/// The basic usage is for an originator to start with the [`ml_dsa_44::try_keygen`] function below to
+/// generate both [`ml_dsa_44::PublicKey`] and [`ml_dsa_44::PrivateKey`] structs. The resulting
+/// [`ml_dsa_44::PrivateKey`] struct implements the [`traits::Signer`] trait which supplies a variety of
+/// functions to sign byte-array messages, such as [`traits::Signer::try_sign()`].
 ///
-/// All three (`PrivateKey`, `PublicKey`and `Signature`) structs implement the [traits::SerDes]
-/// trait. The originator utilizes the [traits::SerDes::into_bytes()] functions to serialize the
+/// All three (`PrivateKey`, `PublicKey`and `Signature`) structs implement the [`traits::SerDes`]
+/// trait. The originator utilizes the [`traits::SerDes::into_bytes()`] functions to serialize the
 /// latter two structs into byte-arrays for transmission with the message. Upon receipt, the remote
-/// party utilizes the [traits::SerDes::try_from_bytes()] functions to deserialize these byte-arrays
+/// party utilizes the [`traits::SerDes::try_from_bytes()`] functions to deserialize these byte-arrays
 /// into structs.
 ///
-/// Finally, the remote party uses the [traits::Verifier::try_verify()] function implemented on the
-/// [ml_dsa_44::PublicKey] struct to verify the message with its [ml_dsa_44::Signature] struct.
+/// Finally, the remote party uses the [`traits::Verifier::try_verify()`] function implemented on the
+/// [`ml_dsa_44::PublicKey`] struct to verify the message with its [`ml_dsa_44::Signature`] struct.
 ///
 /// See the top-level [crate] documentation for example code that implements the above flow.
 pub mod ml_dsa_44 {

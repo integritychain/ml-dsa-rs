@@ -1,6 +1,22 @@
 use crate::types::{Zero, R};
 use crate::{QI, QU};
 
+/// If the condition is not met, return an error message. Borrowed from the `anyhow` crate.
+macro_rules! ensure {
+    ($cond:expr, $msg:literal $(,)?) => {
+        if !$cond {
+            return Err($msg);
+        }
+    };
+}
+pub(crate) use ensure; // make available throughout crate
+
+
+pub(crate) fn is_in_range(w: &R, lo: i32, hi: i32) -> bool {
+    w.iter().all(|&e| (e >= -lo) & (e <= hi))
+}
+
+
 pub const fn bitlen(a: usize) -> usize { a.ilog2() as usize + 1 }
 
 /// See definition on page 6
