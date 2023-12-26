@@ -8,9 +8,9 @@ fn test_44_rounds() {
     let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(123);
     for i in 0..128 {
         msg[0] = i as u8;
-        let (pk, sk) = ml_dsa_44::KG::try_keygen_with_rng(&mut rng).unwrap();
-        let sig = sk.try_sign(&msg).unwrap();
-        let ver = pk.try_verify(&msg, &sig);
+        let (pk, sk) = ml_dsa_44::KG::try_keygen_with_rng_vt(&mut rng).unwrap();
+        let sig = sk.try_sign_ct(&msg).unwrap();
+        let ver = pk.try_verify_vt(&msg, &sig);
         assert!(ver.unwrap())
     }
 }
@@ -21,9 +21,9 @@ fn test_65_rounds() {
     let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(456);
     for i in 0..128 {
         msg[0] = i as u8;
-        let (pk, sk) = ml_dsa_65::KG::try_keygen_with_rng(&mut rng).unwrap();
-        let sig = sk.try_sign(&msg).unwrap();
-        let ver = pk.try_verify(&msg, &sig);
+        let (pk, sk) = ml_dsa_65::KG::try_keygen_with_rng_vt(&mut rng).unwrap();
+        let sig = sk.try_sign_ct(&msg).unwrap();
+        let ver = pk.try_verify_vt(&msg, &sig);
         assert!(ver.unwrap())
     }
 }
@@ -34,9 +34,9 @@ fn test_87_rounds() {
     let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(789);
     for i in 0..128 {
         msg[0] = i as u8;
-        let (pk, sk) = ml_dsa_87::KG::try_keygen_with_rng(&mut rng).unwrap();
-        let sig = sk.try_sign(&msg).unwrap();
-        let ver = pk.try_verify(&msg, &sig);
+        let (pk, sk) = ml_dsa_87::KG::try_keygen_with_rng_vt(&mut rng).unwrap();
+        let sig = sk.try_sign_ct(&msg).unwrap();
+        let ver = pk.try_verify_vt(&msg, &sig);
         assert!(ver.unwrap())
     }
 }

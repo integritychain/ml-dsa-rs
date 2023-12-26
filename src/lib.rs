@@ -72,16 +72,18 @@ macro_rules! functionality {
         /// # Errors
         /// Returns an error when random number generator fails.
         #[cfg(feature = "default-rng")]
-        pub fn try_keygen() -> Result<(PublicKey, PrivateKey), &'static str> { KG::try_keygen() }
+        pub fn try_keygen_vt() -> Result<(PublicKey, PrivateKey), &'static str> {
+            KG::try_keygen_vt()
+        }
 
         /// Generates a public and private key pair specific to this security parameter set. <br>
         /// This function utilizes a supplied random number generator.
         /// # Errors
         /// Returns an error when random number generator fails.
-        pub fn try_keygen_with_rng(
+        pub fn try_keygen_with_rng_vt(
             rng: &mut impl CryptoRngCore,
         ) -> Result<(PublicKey, PrivateKey), &'static str> {
-            KG::try_keygen_with_rng(rng)
+            KG::try_keygen_with_rng_vt(rng)
         }
 
 
@@ -89,7 +91,7 @@ macro_rules! functionality {
             type PrivateKey = PrivateKey;
             type PublicKey = PublicKey;
 
-            fn try_keygen_with_rng(
+            fn try_keygen_with_rng_vt(
                 rng: &mut impl CryptoRngCore,
             ) -> Result<(PublicKey, PrivateKey), &'static str> {
                 let (pk, sk) = ml_dsa::key_gen::<ETA, K, L, PK_LEN, SK_LEN>(rng)?;
@@ -101,7 +103,7 @@ macro_rules! functionality {
         impl Signer for PrivateKey {
             type Signature = Signature;
 
-            fn try_sign_with_rng(
+            fn try_sign_with_rng_ct(
                 &self, rng: &mut impl CryptoRngCore, message: &[u8],
             ) -> Result<Signature, &'static str> {
                 let sig = ml_dsa::sign::<
@@ -125,7 +127,7 @@ macro_rules! functionality {
         impl Verifier for PublicKey {
             type Signature = Signature;
 
-            fn try_verify(&self, message: &[u8], sig: &Signature) -> Result<bool, &'static str> {
+            fn try_verify_vt(&self, message: &[u8], sig: &Signature) -> Result<bool, &'static str> {
                 ml_dsa::verify::<BETA, GAMMA1, GAMMA2, K, L, LAMBDA, OMEGA, PK_LEN, SIG_LEN, TAU>(
                     &self.0, &message, &sig.0,
                 )
@@ -188,10 +190,10 @@ macro_rules! functionality {
 /// public key, secret key, and signature along with a number of internal constants. The ML-DSA-44
 /// parameter set is claimed to be in security strength category 2.
 ///
-/// The basic usage is for an originator to start with the [`ml_dsa_44::try_keygen`] function below to
+/// The basic usage is for an originator to start with the [`ml_dsa_44::try_keygen_vt`] function below to
 /// generate both [`ml_dsa_44::PublicKey`] and [`ml_dsa_44::PrivateKey`] structs. The resulting
 /// [`ml_dsa_44::PrivateKey`] struct implements the [`traits::Signer`] trait which supplies a variety of
-/// functions to sign byte-array messages, such as [`traits::Signer::try_sign()`].
+/// functions to sign byte-array messages, such as [`traits::Signer::try_sign_ct()`].
 ///
 /// All three (`PrivateKey`, `PublicKey`and `Signature`) structs implement the [`traits::SerDes`]
 /// trait. The originator utilizes the [`traits::SerDes::into_bytes()`] functions to serialize the
@@ -199,10 +201,11 @@ macro_rules! functionality {
 /// party utilizes the [`traits::SerDes::try_from_bytes()`] functions to deserialize these byte-arrays
 /// into structs.
 ///
-/// Finally, the remote party uses the [`traits::Verifier::try_verify()`] function implemented on the
+/// Finally, the remote party uses the [`traits::Verifier::try_verify_vt()`] function implemented on the
 /// [`ml_dsa_44::PublicKey`] struct to verify the message with its [`ml_dsa_44::Signature`] struct.
 ///
 /// See the top-level [crate] documentation for example code that implements the above flow.
+#[cfg(feature = "ml-dsa-44")]
 pub mod ml_dsa_44 {
     use super::QU;
     const TAU: usize = 39;
@@ -227,6 +230,7 @@ pub mod ml_dsa_44 {
 /// Functionality for the ML-DSA-65 security parameter set. This includes specific sizes for the
 /// public key, secret key, and signature along with a number of internal constants. The ML-DSA-65
 /// parameter set is claimed to be in security strength category 3.
+#[cfg(feature = "ml-dsa-65")]
 pub mod ml_dsa_65 {
     use super::QU;
     const TAU: usize = 49;
@@ -252,6 +256,7 @@ pub mod ml_dsa_65 {
 /// Functionality for the ML-DSA-87 security parameter set. This includes specific sizes for the
 /// public key, secret key, and signature along with a number of internal constants. The ML-DSA-87
 /// parameter set is claimed to be in security strength category 5.
+#[cfg(feature = "ml-dsa-87")]
 pub mod ml_dsa_87 {
     use super::QU;
     const TAU: usize = 60;

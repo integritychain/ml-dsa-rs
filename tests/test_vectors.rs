@@ -88,7 +88,7 @@ fn test_keygen() {
         get_keygen_vec("./tests/test_vectors/Key Generation -- ML-DSA-44.txt");
     let mut rnd = MyRng::new();
     rnd.push(&seed);
-    let (pk_act, sk_act) = ml_dsa_44::KG::try_keygen_with_rng(&mut rnd).unwrap();
+    let (pk_act, sk_act) = ml_dsa_44::KG::try_keygen_with_rng_vt(&mut rnd).unwrap();
     assert_eq!(pk_exp, pk_act.into_bytes());
     assert_eq!(sk_exp, sk_act.into_bytes());
 
@@ -96,7 +96,7 @@ fn test_keygen() {
         get_keygen_vec("./tests/test_vectors/Key Generation -- ML-DSA-65.txt");
     let mut rnd = MyRng::new();
     rnd.push(&seed);
-    let (pk_act, sk_act) = ml_dsa_65::KG::try_keygen_with_rng(&mut rnd).unwrap();
+    let (pk_act, sk_act) = ml_dsa_65::KG::try_keygen_with_rng_vt(&mut rnd).unwrap();
     assert_eq!(pk_exp, pk_act.into_bytes());
     assert_eq!(sk_exp, sk_act.into_bytes());
 
@@ -104,7 +104,7 @@ fn test_keygen() {
         get_keygen_vec("./tests/test_vectors/Key Generation -- ML-DSA-87.txt");
     let mut rnd = MyRng::new();
     rnd.push(&seed);
-    let (pk_act, sk_act) = ml_dsa_87::KG::try_keygen_with_rng(&mut rnd).unwrap();
+    let (pk_act, sk_act) = ml_dsa_87::KG::try_keygen_with_rng_vt(&mut rnd).unwrap();
     assert_eq!(pk_exp, pk_act.into_bytes());
     assert_eq!(sk_exp, sk_act.into_bytes());
 }
@@ -117,7 +117,7 @@ fn test_sign() {
     let sk = ml_dsa_44::PrivateKey::try_from_bytes(sk.try_into().unwrap()).unwrap();
     let mut rnd = MyRng::new();
     rnd.push(&seed);
-    let sig_act = sk.try_sign_with_rng(&mut rnd, &msg);
+    let sig_act = sk.try_sign_with_rng_ct(&mut rnd, &msg);
     assert_eq!(sig_exp, sig_act.unwrap().into_bytes());
 
     let (msg, sk, seed, sig_exp) =
@@ -125,7 +125,7 @@ fn test_sign() {
     let sk = ml_dsa_65::PrivateKey::try_from_bytes(sk.try_into().unwrap()).unwrap();
     let mut rnd = MyRng::new();
     rnd.push(&seed);
-    let sig_act = sk.try_sign_with_rng(&mut rnd, &msg);
+    let sig_act = sk.try_sign_with_rng_ct(&mut rnd, &msg);
     assert_eq!(sig_exp, sig_act.unwrap().into_bytes());
 
     let (msg, sk, seed, sig_exp) =
@@ -133,7 +133,7 @@ fn test_sign() {
     let sk = ml_dsa_87::PrivateKey::try_from_bytes(sk.try_into().unwrap()).unwrap();
     let mut rnd = MyRng::new();
     rnd.push(&seed);
-    let sig_act = sk.try_sign_with_rng(&mut rnd, &msg);
+    let sig_act = sk.try_sign_with_rng_ct(&mut rnd, &msg);
     assert_eq!(sig_exp, sig_act.unwrap().into_bytes());
 }
 
@@ -144,20 +144,20 @@ fn test_verify() {
         get_verify_vec("./tests/test_vectors/Signature Verification -- ML-DSA-44.txt");
     let pk = ml_dsa_44::PublicKey::try_from_bytes(pk.try_into().unwrap()).unwrap();
     let sig = ml_dsa_44::Signature::try_from_bytes(sig.try_into().unwrap()).unwrap();
-    let pass = pk.try_verify(&msg, &sig);
+    let pass = pk.try_verify_vt(&msg, &sig);
     assert!(pass.unwrap());
 
     let (pk, message, sig) =
         get_verify_vec("./tests/test_vectors/Signature Verification -- ML-DSA-65.txt");
     let pk = ml_dsa_65::PublicKey::try_from_bytes(pk.try_into().unwrap()).unwrap();
     let sig = ml_dsa_65::Signature::try_from_bytes(sig.try_into().unwrap()).unwrap();
-    let pass = pk.try_verify(&message, &sig);
+    let pass = pk.try_verify_vt(&message, &sig);
     assert!(pass.unwrap());
 
     let (pk, message, sig) =
         get_verify_vec("./tests/test_vectors/Signature Verification -- ML-DSA-87.txt");
     let pk = ml_dsa_87::PublicKey::try_from_bytes(pk.try_into().unwrap()).unwrap();
     let sig = ml_dsa_87::Signature::try_from_bytes(sig.try_into().unwrap()).unwrap();
-    let pass = pk.try_verify(&message, &sig);
+    let pass = pk.try_verify_vt(&message, &sig);
     assert!(pass.unwrap());
 }

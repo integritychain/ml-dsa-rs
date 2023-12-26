@@ -66,7 +66,7 @@ pub(crate) fn key_gen<
     }
 
     // 7: pk ← pkEncode(ρ, t_1)
-    let pk: [u8; PK_LEN] = pk_encode::<K, PK_LEN>(&rho, &t_1);
+    let pk: [u8; PK_LEN] = pk_encode::<K, PK_LEN>(&rho, &t_1).unwrap();
 
     // 8: tr ← H(BytesToBits(pk), 512)
     let mut tr = [0u8; 64];
@@ -75,7 +75,8 @@ pub(crate) fn key_gen<
 
     // 9: sk ← skEncode(ρ, K, tr, s_1 , s_2 , t_0 )     ▷ K and tr are for use in signing
     let sk: [u8; SK_LEN] =
-        sk_encode::<{ D as usize }, ETA, K, L, SK_LEN>(&rho, &cap_k, &tr, &s_1, &s_2, &t_0);
+        sk_encode::<{ D as usize }, ETA, K, L, SK_LEN>(&rho, &cap_k, &tr, &s_1, &s_2, &t_0)
+            .unwrap();
 
     // 10: return (pk, sk)
     Ok((pk, sk))
@@ -187,7 +188,7 @@ pub(crate) fn sign<
         let w1e_len = 32 * K * bitlen(((QU - 1) / (2 * GAMMA2 as u32) - 1) as usize);
         //assert_eq!(w1e_len, 768);
         let mut w1_tilde = [0u8; 1024];
-        w1_encode::<K, GAMMA2>(&w_1, &mut w1_tilde[0..w1e_len]);
+        w1_encode::<K, GAMMA2>(&w_1, &mut w1_tilde[0..w1e_len])?;
         let mut h99 = h_xof(&[&mu, &w1_tilde[0..w1e_len]]);
         h99.read(&mut c_tilde); // Ok, to read a bit too much
 
@@ -306,7 +307,7 @@ pub(crate) fn sign<
         &c_tilde[0..2 * LAMBDA / 8],
         &zmq,
         &h.unwrap(),
-    );
+    )?;
 
     Ok(sig) // 33: return σ
 }
@@ -336,7 +337,7 @@ pub(crate) fn verify<
     let (rho, t_1): ([u8; 32], [R; K]) = pk_decode::<K, PK_LEN>(pk)?;
 
     // 2: (c_tilde, z, h) ← sigDecode(σ)    ▷ Signer’s commitment hash c_tilde, response z and hint h
-    let (c_tilde, z, h): (Vec<u8>, [R; L], Option<[R; K]>) =
+    let (c_tilde, z, h) = //: (Vec<u8>, [R; L], Option<[R; K]>) =
         sig_decode::<GAMMA1, K, L, LAMBDA, OMEGA>(sig)?;
 
     // 3: if h = ⊥ then return false ▷ Hint was not properly encoded
@@ -361,7 +362,7 @@ pub(crate) fn verify<
     hasher.read(&mut mu);
 
     // 8: (c_tilde_1, c_tilde_2) ∈ {0,1}^256 × {0,1}^{2λ-256} ← c_tilde   NOTE: c_tilde_2 is discarded
-    let c_tilde_1 = c_tilde.clone(); // c_tilde_2 is just discarded...
+    let c_tilde_1 = c_tilde; //.clone(); // c_tilde_2 is just discarded...
 
     // 9: c ← SampleInBall(c_tilde_1)    ▷ Compute verifier’s challenge from c_tilde
     let c: R = sample_in_ball::<TAU>(&c_tilde_1[0..32].try_into().unwrap());
@@ -412,14 +413,14 @@ pub(crate) fn verify<
     let qm12gm1 = (QU - 1) / (2 * GAMMA2 as u32) - 1;
     let bl = bitlen(qm12gm1 as usize);
     let mut tmp = vec![0u8; 32 * K * bl];
-    w1_encode::<K, GAMMA2>(&wp_1, &mut tmp[..]);
+    w1_encode::<K, GAMMA2>(&wp_1, &mut tmp[..])?;
     let mut hasher = h_xof(&[&mu, &tmp[..]]);
-    let mut c_tilde_p = vec![0u8; 2 * LAMBDA / 8];
-    hasher.read(&mut c_tilde_p);
+    let mut c_tilde_p = [0u8; 64];
+    hasher.read(&mut c_tilde_p); // leftover to be ignored
 
     // 13: return [[ ||z||∞ < γ1 −β]] and [[c_tilde = c_tilde_′]] and [[number of 1’s in h is ≤ ω]]
     let left = helpers::infinity_norm(&z) < ((GAMMA1 - BETA as usize) as i32);
-    let center = c_tilde == c_tilde_p;
+    let center = c_tilde[0..LAMBDA / 4] == c_tilde_p[0..LAMBDA / 4];
     let right = h // TODO: this checks #h per each R (rather than overall total)
         .unwrap()
         .iter()

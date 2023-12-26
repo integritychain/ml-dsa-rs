@@ -14,21 +14,21 @@ pub trait KeyGen {
     type PrivateKey;
 
     /// Generates a public and private key pair specific to this security parameter set. <br>
-    /// This function utilizes a supplied random number generator.
-    /// # Errors
-    /// Returns an error when random number generator fails.
-    fn try_keygen_with_rng(
-        rng: &mut impl CryptoRngCore,
-    ) -> Result<(Self::PublicKey, Self::PrivateKey), &'static str>;
-
-    /// Generates a public and private key pair specific to this security parameter set. <br>
-    /// This function utilizes the OS default random number generator.
+    /// This function utilizes the OS default random number generator and operates in variable time.
     /// # Errors
     /// Returns an error when random number generator fails.
     #[cfg(feature = "default-rng")]
-    fn try_keygen() -> Result<(Self::PublicKey, Self::PrivateKey), &'static str> {
-        Self::try_keygen_with_rng(&mut OsRng)
+    fn try_keygen_vt() -> Result<(Self::PublicKey, Self::PrivateKey), &'static str> {
+        Self::try_keygen_with_rng_vt(&mut OsRng)
     }
+
+    /// Generates a public and private key pair specific to this security parameter set. <br>
+    /// This function utilizes a supplied random number generator and operates in variable time.
+    /// # Errors
+    /// Returns an error when random number generator fails.
+    fn try_keygen_with_rng_vt(
+        rng: &mut impl CryptoRngCore,
+    ) -> Result<(Self::PublicKey, Self::PrivateKey), &'static str>;
 }
 
 
@@ -38,19 +38,23 @@ pub trait Signer {
     type Signature;
 
     /// Attempt to sign the given message, returning a digital signature on
-    /// success, or an error if something went wrong.
+    /// success, or an error if something went wrong. This function utilizes the default OS RNG and
+    /// operates in constant time with respect to the `PrivateKey` (only; work in progress).
+    ///
     /// # Errors
     /// Returns an error when random number generator fails
     #[cfg(feature = "default-rng")]
-    fn try_sign(&self, message: &[u8]) -> Result<Self::Signature, &'static str> {
-        self.try_sign_with_rng(&mut OsRng, message)
+    fn try_sign_ct(&self, message: &[u8]) -> Result<Self::Signature, &'static str> {
+        self.try_sign_with_rng_ct(&mut OsRng, message)
     }
 
     /// Attempt to sign the given message, returning a digital signature on
-    /// success, or an error if something went wrong.
+    /// success, or an error if something went wrong. This function utilizes a supplied RNG and
+    /// operates in constant time with respect to the `PrivateKey` (only; work in progress).
+    ///
     /// # Errors
     /// Returns an error when random number generator fails
-    fn try_sign_with_rng(
+    fn try_sign_with_rng_ct(
         &self, rng: &mut impl CryptoRngCore, message: &[u8],
     ) -> Result<Self::Signature, &'static str>;
 }
@@ -61,11 +65,13 @@ pub trait Verifier {
     /// The signature is specific to the chosen security parameter set, e.g., ml-dsa-44, ml-dsa-65 or ml-dsa-87
     type Signature;
 
-    /// Doc for verify function
+    /// Doc for verify function. This function operates in variable time.
+    ///
     /// # Errors
     /// Returns an error on malformed or illegal input
-    fn try_verify(&self, message: &[u8], signature: &Self::Signature)
-        -> Result<bool, &'static str>;
+    fn try_verify_vt(
+        &self, message: &[u8], signature: &Self::Signature,
+    ) -> Result<bool, &'static str>;
 }
 
 /// The `SerDes` trait provides for validated serialization and deserialization of fixed size elements

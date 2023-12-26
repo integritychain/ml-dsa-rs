@@ -1,5 +1,6 @@
-use crate::types::{Rq, Zero, R, T};
-use crate::{helpers, QI, QU, ZETA};
+use crate::helpers::reduce_q;
+use crate::types::{Zero, R, T};
+use crate::{helpers};
 
 
 /// Algorithm 35 NTT(w) on page 36.
@@ -34,16 +35,17 @@ pub(crate) fn ntt(w: &R) -> T {
             k += 1;
 
             // 10: zeta ← ζ^{brv(k)} mod q
-            let zeta = helpers::pow_mod_q(ZETA, (k as u8).reverse_bits()) as i64; // >> 1) as i64;
+            //let zeta = helpers::pow_mod_q(ZETA, (k as u8).reverse_bits()) as i64; // >> 1) as i64;
+            let zeta = helpers::ZETA_TABLE[k] as i64; //pow_mod_q(ZETA, (k as u8).reverse_bits()) as i64; // >> 1) as i64;
 
             // 11: for j from start to start + len − 1 do
             for j in start..(start + len) {
                 // 12: t ← zeta · w_hat[ j + len]
-                let t = ((zeta * w_hat[j + len] as i64).rem_euclid(QU as i64)) as i32;
+                let t = reduce_q(zeta * w_hat[j + len] as i64);
                 // 13: w_hat[j + len] ← w_hat[j] − t
-                w_hat[j + len] = (QU as i32 + w_hat[j] - t).rem_euclid(QI);
-                // 14: w_hat[j] ← w_hat[j] + t
-                w_hat[j] = (QU as i32 + w_hat[j] + t).rem_euclid(QI);
+                w_hat[j + len] = w_hat[j] - t; //).rem_euclid(QI);
+                                               // 14: w_hat[j] ← w_hat[j] + t
+                w_hat[j] += t; //).rem_euclid(QI);
             } // 15: end for
               // 16: start ← start + 2 · len
             start += 2 * len;
@@ -80,17 +82,18 @@ pub(crate) fn inv_ntt(w_hat: &T) -> R {
             // 9: k ← k−1
             k -= 1;
             // 10: zeta ← −ζ^{brv(k)} mod q
-            let zeta = -helpers::pow_mod_q(ZETA, (k as u8).reverse_bits());
+            //let zeta = -helpers::pow_mod_q(ZETA, (k as u8).reverse_bits());
+            let zeta = -(helpers::ZETA_TABLE[k]); //pow_mod_q(ZETA, (k as u8).reverse_bits());
             // 11: for j from start to start + len − 1 do
             for j in start..(start + len) {
                 // 12: t ← w_j
                 let t = w[j];
                 // 13: w_j ← t + w_{j+len}
-                w[j] = (t + w[j + len]).rem_euclid(QI);
+                w[j] = t + w[j + len];
                 // 14: w_{j+len} ← t − w_{j+len}
-                w[j + len] = (QI + t - w[j + len]).rem_euclid(QI);
+                w[j + len] = t - w[j + len];
                 // 15: w_{j+len} ← zeta · w_{j+len}
-                w[j + len] = ((zeta as i64 * w[j + len] as i64).rem_euclid(QI as i64)) as i32;
+                w[j + len] = reduce_q(zeta as i64 * w[j + len] as i64);
             } // 16: end for
               // 17: start ← start + 2 · len
             start += 2 * len;
@@ -104,7 +107,7 @@ pub(crate) fn inv_ntt(w_hat: &T) -> R {
     #[allow(clippy::needless_range_loop)]
     for j in 0..=255 {
         // 23: wj ← f ·wj
-        w[j] = ((f * w[j] as i64).rem_euclid(QI as i64)) as Rq;
+        w[j] = reduce_q(f * w[j] as i64);
     } // 24: end for
     w // 25: return w
 }
