@@ -5,17 +5,18 @@ use crate::types::{Zero, R};
 use crate::QU;
 
 
-/// Algorithm 4: `IntegerToBits(x, alpha)` on page 20 is not needed because the pack and unpack
-/// algorithms have reimplemented at a higher level.
+// Algorithm 4: `IntegerToBits(x, alpha)` on page 20 is not needed because the pack and unpack
+// algorithms have been reimplemented at a higher level.
 
-/// Algorithm 5: `BitsToInteger(y)` on page 20 is not needed because the pack and unpack
-/// algorithms have reimplemented at a higher level.
+// Algorithm 5: `BitsToInteger(y)` on page 20 is not needed because the pack and unpack
+// algorithms have been reimplemented at a higher level.
 
-/// Algorithm 6: `BitsToBytes(y)` on page 21 is not needed because the pack and unpack
-/// algorithms have reimplemented at a higher level.
+// Algorithm 6: `BitsToBytes(y)` on page 21 is not needed because the pack and unpack
+// algorithms have been reimplemented at a higher level.
 
-/// Algorithm 7: `BytesToBits(z)` on page 21 is not needed because the pack and unpack
-/// algorithms have reimplemented at a higher level.
+// Algorithm 7: `BytesToBits(z)` on page 21 is not needed because the pack and unpack
+// algorithms have been reimplemented at a higher level.
+
 
 /// Algorithm 8: `CoefFromThreeBytes(b0, b1, b2)` on page 21.
 /// Generates an element of `{0, 1, 2, . . . , q − 1} ∪ {⊥}`.
@@ -24,7 +25,7 @@ use crate::QU;
 /// Output: An integer modulo `q` or `⊥` (returned as an Error).
 ///
 /// # Errors
-/// Returns an error `⊥` on input between `Q` and `0x7F_FF_FF` (per spec).
+/// Returns an error `⊥` on input between `Q` and `0x7F_FF_FF` (per spec; for rejection sampling).
 pub(crate) fn coef_from_three_bytes(bbb: [u8; 3]) -> Result<u32, &'static str> {
     // 1: if b2 > 127 then
     // 2: b2 ← b2 − 128     ▷ Set the top bit of b2 to zero
@@ -74,8 +75,7 @@ pub(crate) fn coef_from_half_byte<const ETA: usize>(b: u8) -> Result<i32, &'stat
 
 
 /// Algorithm 10: `SimpleBitPack(w, b)` on page 22.
-/// Encodes a polynomial w into a byte string.
-/// This function has been optimized, but remains under test alongside the original logic.
+/// Encodes a polynomial `w` into a byte string.
 ///
 /// Input: `b ∈ N` and `w ∈ R` such that the coeffcients of `w` are all in `[0, b]`. <br>
 /// Output: A byte string of length `32·bitlen(b)`.
@@ -92,8 +92,7 @@ pub(crate) fn simple_bit_pack(w: &R, b: u32, bytes_out: &mut [u8]) -> Result<(),
 
 
 /// Algorithm 11: `BitPack(w, a, b)` on page 22
-/// Encodes a polynomial w into a byte string.
-/// This function has been optimized, but remains under test alongside the original logic.
+/// Encodes a polynomial `w` into a byte string.
 ///
 /// Input: `a, b ∈ N` and `w ∈ R` such that the coefficients of `w` are all in `[−a, b]`. <br>
 /// Output: A byte string of length `32·bitlen(a + b)`.
@@ -275,6 +274,7 @@ pub(crate) fn hint_bit_unpack<const K: usize, const OMEGA: usize>(
         }
         // 10: end for
     }
+
     // 11: while Index < ω do
     while index < OMEGA as u8 {
         // 12: if y[Index] != 0 then return ⊥

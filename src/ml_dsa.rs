@@ -26,7 +26,6 @@ pub(crate) fn key_gen<
 >(
     rng: &mut impl CryptoRngCore,
 ) -> Result<([u8; PK_LEN], [u8; SK_LEN]), &'static str> {
-
     // 1: ξ ← {0,1}^{256}    ▷ Choose random seed
     let mut xi = [0u8; 32];
     rng.try_fill_bytes(&mut xi).map_err(|_| "Random number generator failed")?;
@@ -107,7 +106,6 @@ pub(crate) fn sign<
 >(
     rand_gen: &mut impl CryptoRngCore, sk: &[u8; SK_LEN], message: &[u8],
 ) -> Result<[u8; SIG_LEN], &'static str> {
-
     // 1:  (ρ, K, tr, s_1 , s_2 , t_0 ) ← skDecode(sk)
     #[allow(clippy::type_complexity)]
     let (rho, cap_k, tr, s_1, s_2, t_0): (
@@ -334,7 +332,6 @@ pub(crate) fn verify<
 >(
     pk: &[u8; PK_LEN], m: &[u8], sig: &[u8; SIG_LEN],
 ) -> Result<bool, &'static str> {
-
     // 1: (ρ,t_1) ← pkDecode(pk)
     let (rho, t_1): ([u8; 32], [R; K]) = pk_decode::<K, PK_LEN>(pk)?;
 
@@ -384,8 +381,7 @@ pub(crate) fn verify<
     let mut ntt_t1_d2: [T; K] = [T::zero(); K];
     for i in 0..K {
         for j in 0..256 {
-            ntt_t1_d2[i][j] =
-                reduce_q(ntt_t1[i][j] as i64 * 2i32.pow(D) as i64);
+            ntt_t1_d2[i][j] = reduce_q(ntt_t1[i][j] as i64 * 2i32.pow(D) as i64);
         }
     }
     let ntt_c: T = ntt(&c);

@@ -2,6 +2,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use ml_dsa_rs::traits::{PreGen, Signer, Verifier};
 use ml_dsa_rs::{ml_dsa_44, ml_dsa_65, ml_dsa_87};
 
+
 pub fn criterion_benchmark(c: &mut Criterion) {
     let message = [0u8, 1, 2, 3, 4, 5, 6, 7];
 
@@ -16,6 +17,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let (pk87, sk87) = ml_dsa_87::try_keygen_vt().unwrap();
     let precom87 = sk87.gen_precompute();
     let sig87 = sk87.try_sign_ct(&message).unwrap();
+
 
     c.bench_function("ml_dsa_44 keygen", |b| b.iter(|| ml_dsa_44::try_keygen_vt()));
     c.bench_function("ml_dsa_44 sign", |b| b.iter(|| sk44.try_sign_ct(&message)));
@@ -36,6 +38,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 criterion_group!(benches, criterion_benchmark);
 criterion_main!(benches);
 
+
+// Intel® Core™ i7-7700K CPU @ 4.20GHz × 8
 
 // Prior to any optimization
 //    ml_dsa_44 keygen        time:   [158.58 µs 158.62 µs 158.66 µs]

@@ -2,6 +2,7 @@ use crate::types::{Zero, R};
 use crate::{QI, QU, ZETA};
 
 /// If the condition is not met, return an error message. Borrowed from the `anyhow` crate.
+/// Pervasive use of this macro hits performance around 3%
 macro_rules! ensure {
     ($cond:expr, $msg:literal $(,)?) => {
         if !$cond {
@@ -9,6 +10,7 @@ macro_rules! ensure {
         }
     };
 }
+
 pub(crate) use ensure; // make available throughout crate
 
 

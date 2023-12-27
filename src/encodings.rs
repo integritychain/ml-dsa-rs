@@ -13,8 +13,8 @@ use crate::{
 /// Algorithm 16: `pkEncode(ρ, t1)` on page 25.
 /// Encodes a public key for ML-DSA into a byte string.
 ///
-/// Input:ρ ∈ {0, 1}^256, t1 ∈ Rk with coefficients in [0, 2^{bitlen(q−1) − d} - 1]). <br>
-/// Output: Public key pk ∈ B^{32+32k(bitlen (q−1)−d)}.
+/// Input: `ρ ∈ {0, 1}^256`, `t1 ∈ Rk` with coefficients in `[0, 2^{bitlen(q−1) − d} - 1]`. <br>
+/// Output: Public key `pk ∈ B^{32+32k(bitlen (q−1)−d)}`.
 ///
 /// # Errors
 /// Returns an error ........ TKTK
@@ -44,8 +44,8 @@ pub(crate) fn pk_encode<const K: usize, const PK_LEN: usize>(
 /// Algorithm 17: `pkDecode(pk)` on page 25.
 /// Reverses the procedure pkEncode.
 ///
-/// Input: Public key pk ∈ B^{32+32k(bitlen(q−1)−d)}. <br>
-/// Output: ρ ∈ {0, 1}^256, t1 ∈ R^k with coeffcients in [0, 2^{bitlen(q−1)−d} − 1]).
+/// Input: Public key `pk ∈ B^{32+32k(bitlen(q−1)−d)}`. <br>
+/// Output: `ρ ∈ {0, 1}^256`, `t1 ∈ R^k` with coefficients in `[0, 2^{bitlen(q−1)−d} − 1]`).
 ///
 /// # Errors
 /// Returns an error ........ TKTK
