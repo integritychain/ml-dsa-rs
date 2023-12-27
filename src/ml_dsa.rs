@@ -2,7 +2,7 @@ use crate::encodings::{
     pk_decode, pk_encode, sig_decode, sig_encode, sk_decode, sk_encode, w1_encode,
 };
 use crate::hashing::{expand_a, expand_mask, expand_s, h_xof, sample_in_ball};
-use crate::helpers::{bitlen, mod_pm};
+use crate::helpers::{bitlen, mod_pm, reduce_q};
 use crate::high_low::{high_bits, low_bits, make_hint, power2round, use_hint};
 use crate::ntt::{inv_ntt, ntt};
 use crate::types::{Zero, R, T};
@@ -11,8 +11,12 @@ use rand_core::CryptoRngCore;
 use sha3::digest::XofReader;
 
 
-/// Algorithm 1 ML-DSA.KeyGen() on page 15.
+/// Algorithm: 1 `ML-DSA.KeyGen()` on page 15.
 /// Generates a public-private key pair.
+///
+/// Input: `rng` a cryptographically-secure random number generator. <br>
+/// Output: Public key, `pk` ∈ B^{32+32k(bitlen(q−1)−d)},
+/// and private key, `sk` ∈ B^{32+32+64+32·((ℓ+k)·bitlen(2η)+dk)}
 pub(crate) fn key_gen<
     const ETA: usize,
     const K: usize,
@@ -22,8 +26,6 @@ pub(crate) fn key_gen<
 >(
     rng: &mut impl CryptoRngCore,
 ) -> Result<([u8; PK_LEN], [u8; SK_LEN]), &'static str> {
-    // Output: Public key, pk ∈ B^{32+32k(bitlen(q−1)−d)},
-    // and private key, sk ∈ B^{32+32+64+32·((ℓ+k)·bitlen(2η)+dk)}
 
     // 1: ξ ← {0,1}^{256}    ▷ Choose random seed
     let mut xi = [0u8; 32];
@@ -42,7 +44,7 @@ pub(crate) fn key_gen<
     let cap_a_hat: [[T; L]; K] = expand_a::<K, L>(&rho);
 
     // 4: (s_1, s_2 ) ← ExpandS(ρ′)
-    let (s_1, s_2): ([R; L], [R; K]) = expand_s::<ETA, K, L>(&rho_prime);
+    let (s_1, s_2): ([R; L], [R; K]) = expand_s::<ETA, K, L>(&rho_prime)?;
 
     // 5: t ← NTT−1 (cap_a_hat ◦ NTT(s_1)) + s_2        ▷ Compute t = As1 + s2
     let mut s_1_hat: [T; L] = [T::zero(); L];
@@ -66,7 +68,7 @@ pub(crate) fn key_gen<
     }
 
     // 7: pk ← pkEncode(ρ, t_1)
-    let pk: [u8; PK_LEN] = pk_encode::<K, PK_LEN>(&rho, &t_1).unwrap();
+    let pk: [u8; PK_LEN] = pk_encode::<K, PK_LEN>(&rho, &t_1)?;
 
     // 8: tr ← H(BytesToBits(pk), 512)
     let mut tr = [0u8; 64];
@@ -75,8 +77,7 @@ pub(crate) fn key_gen<
 
     // 9: sk ← skEncode(ρ, K, tr, s_1 , s_2 , t_0 )     ▷ K and tr are for use in signing
     let sk: [u8; SK_LEN] =
-        sk_encode::<{ D as usize }, ETA, K, L, SK_LEN>(&rho, &cap_k, &tr, &s_1, &s_2, &t_0)
-            .unwrap();
+        sk_encode::<{ D as usize }, ETA, K, L, SK_LEN>(&rho, &cap_k, &tr, &s_1, &s_2, &t_0)?;
 
     // 10: return (pk, sk)
     Ok((pk, sk))
@@ -85,6 +86,9 @@ pub(crate) fn key_gen<
 
 /// Algorithm 2 ML-DSA.Sign(sk, M) on page 17
 /// Generates a signature for a message M.
+///
+/// Input: Private key, `sk` ∈ B^{32+32+64+32·((ℓ+k)·bitlen(2η)+dk)} and the message `M` ∈ {0,1}^∗ <br>
+/// Output: Signature, `σ` ∈ B^{32+ℓ·32·(1+bitlen(gamma_1 −1))+ω+k}
 #[allow(clippy::similar_names)]
 #[allow(clippy::many_single_char_names)]
 #[allow(clippy::too_many_lines)]
@@ -103,9 +107,6 @@ pub(crate) fn sign<
 >(
     rand_gen: &mut impl CryptoRngCore, sk: &[u8; SK_LEN], message: &[u8],
 ) -> Result<[u8; SIG_LEN], &'static str> {
-    // Input: Private key, sk ∈ B^{32+32+64+32·((ℓ+k)·bitlen(2η)+dk)} and the message M ∈ {0,1}^∗
-    // Output: Signature, σ ∈ B^{32+ℓ·32·(1+bitlen(gamma_1 −1))+ω+k}
-    //let mut sig = [0u8; SIG_LEN];
 
     // 1:  (ρ, K, tr, s_1 , s_2 , t_0 ) ← skDecode(sk)
     #[allow(clippy::type_complexity)]
@@ -163,7 +164,7 @@ pub(crate) fn sign<
     while z.is_none() & h.is_none() {
         //
         // 12: y ← ExpandMask(ρ′ , κ)
-        let y: [R; L] = expand_mask::<GAMMA1, L>(&rho_prime, k);
+        let y: [R; L] = expand_mask::<GAMMA1, L>(&rho_prime, k)?;
 
         // 13: w ← NTT−1 (cap_a_hat ◦ NTT(y))
         let mut ntt_y: [T; L] = [T::zero(); L];
@@ -198,7 +199,7 @@ pub(crate) fn sign<
         // c_tilde_2 is never used!
 
         // 17: c ← SampleInBall(c_tilde_1)    ▷ Verifier’s challenge
-        let c: R = sample_in_ball::<TAU>(&c_tilde_1);
+        let c: R = sample_in_ball::<TAU>(&c_tilde_1)?;
 
         // 18: c_hat ← NTT(c)
         let c_hat: T = ntt(&c);
@@ -247,7 +248,7 @@ pub(crate) fn sign<
         }
 
         // 23: if ||z||∞ ≥ Gamma1 − β or ||r0||∞ ≥ Gamma2 − β then (z, h) ← ⊥    ▷ Validity checks
-        let z_norm = helpers::infinity_norm(&z.unwrap());
+        let z_norm = helpers::infinity_norm(&z.ok_or("z scrambled")?);
         let r0_norm = helpers::infinity_norm(&r0);
         if (z_norm >= (GAMMA1 as i32 - BETA as i32)) | (r0_norm >= (GAMMA2 as i32 - BETA as i32)) {
             (z, h) = (None, None);
@@ -283,7 +284,8 @@ pub(crate) fn sign<
 
             // 27: if ||⟨⟨c_t_0⟩⟩||∞ ≥ Gamma2 or the number of 1’s in h is greater than ω, then (z, h) ← ⊥
             if (helpers::infinity_norm(&c_t_0) >= GAMMA2 as i32)
-                | (h.unwrap().iter().flatten().filter(|i| (**i).abs() == 1).count() > OMEGA)
+                | (h.ok_or("h scrambled")?.iter().flatten().filter(|i| (**i).abs() == 1).count()
+                    > OMEGA)
             {
                 (z, h) = (None::<[R; L]>, None::<[R; K]>);
             } // 28: end if
@@ -296,25 +298,28 @@ pub(crate) fn sign<
       //
       // 32: σ ← sigEncode(c_tilde, z mod± q, h)
     let mut zmq: [R; L] = [R::zero(); L];
-    let zz = z.unwrap();
+    let zz = z.ok_or("z scrambled 2")?;
     for i in 0..L {
         for j in 0..256 {
             zmq[i][j] = mod_pm(zz[i][j], QU);
         }
     }
-
     let sig = sig_encode::<GAMMA1, K, L, LAMBDA, OMEGA, SIG_LEN>(
         &c_tilde[0..2 * LAMBDA / 8],
         &zmq,
-        &h.unwrap(),
+        &h.ok_or("h scrambled 3")?,
     )?;
 
     Ok(sig) // 33: return σ
 }
 
 
-/// Algorithm 3 ML-DSA.Verify(pk, M, σ) on page 19.
-/// Verifies a signature σ for a message M.
+/// Algorithm 3: `ML-DSA.Verify(pk, M, σ)` on page 19.
+/// Verifies a signature `σ` for a message `M`.
+///
+/// Input: Public key, `pk` ∈ B^{32 + 32*k*(bitlen(q−1) − d) and message `M` ∈ {0,1}∗. <br>
+/// Input: Signature, `σ` ∈ B^{32 + ℓ·32·(1 + bitlen(γ1−1)) + ω + k}. <br>
+/// Output: Boolean
 pub(crate) fn verify<
     const BETA: u32,
     const GAMMA1: usize,
@@ -329,9 +334,6 @@ pub(crate) fn verify<
 >(
     pk: &[u8; PK_LEN], m: &[u8], sig: &[u8; SIG_LEN],
 ) -> Result<bool, &'static str> {
-    // Input: Public key, pk ∈ B^{32 + 32*k*(bitlen(q−1) − d) and message M ∈ {0,1}∗.
-    // Input: Signature, σ ∈ B^{32 + ℓ·32·(1 + bitlen(γ1−1)) + ω + k}.
-    // Output: Boolean
 
     // 1: (ρ,t_1) ← pkDecode(pk)
     let (rho, t_1): ([u8; 32], [R; K]) = pk_decode::<K, PK_LEN>(pk)?;
@@ -365,7 +367,8 @@ pub(crate) fn verify<
     let c_tilde_1 = c_tilde; //.clone(); // c_tilde_2 is just discarded...
 
     // 9: c ← SampleInBall(c_tilde_1)    ▷ Compute verifier’s challenge from c_tilde
-    let c: R = sample_in_ball::<TAU>(&c_tilde_1[0..32].try_into().unwrap());
+    let c: R =
+        sample_in_ball::<TAU>(&c_tilde_1[0..32].try_into().map_err(|_e| "c_tilde_1 scrambled")?)?;
 
     // 10: w′_Approx ← invNTT(cap_A_hat ◦ NTT(z) - NTT(c) ◦ NTT(t_1 · 2^d)    ▷ w′_Approx = Az − ct1·2^d
     let mut ntt_z: [T; L] = [T::zero(); L];
@@ -382,7 +385,7 @@ pub(crate) fn verify<
     for i in 0..K {
         for j in 0..256 {
             ntt_t1_d2[i][j] =
-                (ntt_t1[i][j] as i64 * 2i32.pow(D) as i64).rem_euclid(QI as i64) as i32;
+                reduce_q(ntt_t1[i][j] as i64 * 2i32.pow(D) as i64);
         }
     }
     let ntt_c: T = ntt(&c);
@@ -390,7 +393,7 @@ pub(crate) fn verify<
     for i in 0..K {
         #[allow(clippy::needless_range_loop)]
         for j in 0..256 {
-            ntt_ct[i][j] = (ntt_c[j] as i64 * ntt_t1_d2[i][j] as i64).rem_euclid(QI as i64) as i32;
+            ntt_ct[i][j] = reduce_q(ntt_c[j] as i64 * ntt_t1_d2[i][j] as i64);
         }
     }
 
@@ -405,24 +408,25 @@ pub(crate) fn verify<
     let mut wp_1: [R; K] = [R::zero(); K];
     for i in 0..K {
         for j in 0..256 {
-            wp_1[i][j] = use_hint::<GAMMA2>(h.unwrap()[i][j], wp_approx[i][j]);
+            wp_1[i][j] = use_hint::<GAMMA2>(h.ok_or("h scrambled 3")?[i][j], wp_approx[i][j]);
         }
     }
 
     // 12: c_tilde_′ ← H(µ||w1Encode(w′_1), 2λ)     ▷ Hash it; this should match c_tilde
     let qm12gm1 = (QU - 1) / (2 * GAMMA2 as u32) - 1;
     let bl = bitlen(qm12gm1 as usize);
-    let mut tmp = vec![0u8; 32 * K * bl];
-    w1_encode::<K, GAMMA2>(&wp_1, &mut tmp[..])?;
-    let mut hasher = h_xof(&[&mu, &tmp[..]]);
+    let t_max = 32 * K * bl;
+    let mut tmp = [0u8; 1024]; // TODO: optimize to [0u8; 32 * K * bl]
+    w1_encode::<K, GAMMA2>(&wp_1, &mut tmp[..t_max])?;
+    let mut hasher = h_xof(&[&mu, &tmp[..t_max]]);
     let mut c_tilde_p = [0u8; 64];
     hasher.read(&mut c_tilde_p); // leftover to be ignored
 
     // 13: return [[ ||z||∞ < γ1 −β]] and [[c_tilde = c_tilde_′]] and [[number of 1’s in h is ≤ ω]]
     let left = helpers::infinity_norm(&z) < ((GAMMA1 - BETA as usize) as i32);
     let center = c_tilde[0..LAMBDA / 4] == c_tilde_p[0..LAMBDA / 4];
-    let right = h // TODO: this checks #h per each R (rather than overall total)
-        .unwrap()
+    let right = h // TODO: confirm -- this checks #h per each R (rather than overall total)
+        .ok_or("h scrambled 4")?
         .iter()
         .all(|&r| r.iter().filter(|&&e| e == 1).sum::<i32>() <= OMEGA as i32);
     Ok(left & center & right)

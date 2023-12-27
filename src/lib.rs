@@ -1,4 +1,4 @@
-//#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_std)]
 #![deny(clippy::pedantic)]
 #![deny(warnings)]
 #![deny(missing_docs)]
@@ -31,8 +31,9 @@ const D: u32 = 13;
 // This common functionality is injected into each parameter set module
 macro_rules! functionality {
     () => {
+        use crate::encodings::{pk_decode, sig_decode, sk_decode};
         use crate::ml_dsa;
-        use crate::traits::{KeyGen, SerDes, Signer, Verifier};
+        use crate::traits::{KeyGen, PreGen, SerDes, Signer, Verifier};
         use rand_core::CryptoRngCore;
         //#[cfg(feature = "default-rng")]
         //use rand_core::OsRng;
@@ -63,6 +64,12 @@ macro_rules! functionality {
         /// Implements the [`crate::traits::KeyGen`] trait.
         #[derive(Zeroize, ZeroizeOnDrop)]
         pub struct KG(); // Arguable how useful an empty struct+trait is...
+
+
+        /// Empty struct to enable `KeyGen` trait objects. <br>
+        /// Implements the [`crate::traits::Precompute`] trait.
+        #[derive(Zeroize, ZeroizeOnDrop)]
+        pub struct PrivatePreCompute([u8; SK_LEN]);
 
 
         // ----- PRIMARY FUNCTIONS ---
@@ -100,7 +107,37 @@ macro_rules! functionality {
         }
 
 
+        impl PreGen for PrivateKey {
+            type PreCompute = PrivatePreCompute;
+
+            fn gen_precompute(&self) -> PrivatePreCompute { PrivatePreCompute(self.into_bytes()) }
+        }
+
+
         impl Signer for PrivateKey {
+            type Signature = Signature;
+
+            fn try_sign_with_rng_ct(
+                &self, rng: &mut impl CryptoRngCore, message: &[u8],
+            ) -> Result<Signature, &'static str> {
+                let sig = ml_dsa::sign::<
+                    BETA,
+                    ETA,
+                    GAMMA1,
+                    GAMMA2,
+                    K,
+                    L,
+                    LAMBDA,
+                    OMEGA,
+                    SIG_LEN,
+                    SK_LEN,
+                    TAU,
+                >(rng, &self.0, message)?;
+                Ok(Signature(sig))
+            }
+        }
+
+        impl Signer for PrivatePreCompute {
             type Signature = Signature;
 
             fn try_sign_with_rng_ct(
@@ -140,45 +177,36 @@ macro_rules! functionality {
         impl SerDes for Signature {
             type ByteArray = [u8; SIG_LEN];
 
-            // TODO: perhaps slice reference then test length immed
             fn try_from_bytes(sig: Self::ByteArray) -> Result<Self, &'static str> {
-                if sig[0] == sig[1] {
-                    return Err("Signature deserialization failed"); // Placeholder for validation
-                }
+                let _ = sig_decode::<GAMMA1, K, L, LAMBDA, OMEGA>(&sig)?; //.map_err(|_e| "Signature deserialization failed");
                 Ok(Signature(sig))
             }
 
-            fn into_bytes(self) -> Self::ByteArray { self.0 }
+            fn into_bytes(&self) -> Self::ByteArray { self.0 }
         }
 
 
         impl SerDes for PublicKey {
             type ByteArray = [u8; PK_LEN];
 
-            // TODO: perhaps slice reference then test length immed
             fn try_from_bytes(pk: Self::ByteArray) -> Result<Self, &'static str> {
-                if pk[0] == pk[1] {
-                    return Err("PublicKey deserialization failed"); // Placeholder for validation
-                }
+                let _ = pk_decode::<K, PK_LEN>(&pk)?; //.map_err(|_e| "Public key deserialization failed");
                 Ok(PublicKey(pk))
             }
 
-            fn into_bytes(self) -> Self::ByteArray { self.0 }
+            fn into_bytes(&self) -> Self::ByteArray { self.0 }
         }
 
 
         impl SerDes for PrivateKey {
             type ByteArray = [u8; SK_LEN];
 
-            // TODO: perhaps slice reference then test length immed
             fn try_from_bytes(sk: Self::ByteArray) -> Result<Self, &'static str> {
-                if sk[0] == sk[1] {
-                    return Err("PrivateKey deserialization failed"); // Placeholder for validation
-                }
+                let _ = sk_decode::<{ D as usize }, ETA, K, L, SK_LEN>(&sk)?; //.map_err(|_e| "Private key deserialization failed");
                 Ok(PrivateKey(sk))
             }
 
-            fn into_bytes(self) -> Self::ByteArray { self.0 }
+            fn into_bytes(&self) -> Self::ByteArray { self.0 }
         }
     };
 }
@@ -207,7 +235,7 @@ macro_rules! functionality {
 /// See the top-level [crate] documentation for example code that implements the above flow.
 #[cfg(feature = "ml-dsa-44")]
 pub mod ml_dsa_44 {
-    use super::QU;
+    use super::{D, QU};
     const TAU: usize = 39;
     const LAMBDA: usize = 128;
     const GAMMA1: usize = 2u32.pow(17) as usize;
@@ -232,7 +260,7 @@ pub mod ml_dsa_44 {
 /// parameter set is claimed to be in security strength category 3.
 #[cfg(feature = "ml-dsa-65")]
 pub mod ml_dsa_65 {
-    use super::QU;
+    use super::{D, QU};
     const TAU: usize = 49;
     const LAMBDA: usize = 192;
     const GAMMA1: usize = 2u32.pow(19) as usize;
@@ -258,7 +286,7 @@ pub mod ml_dsa_65 {
 /// parameter set is claimed to be in security strength category 5.
 #[cfg(feature = "ml-dsa-87")]
 pub mod ml_dsa_87 {
-    use super::QU;
+    use super::{D, QU};
     const TAU: usize = 60;
     const LAMBDA: usize = 256;
     const GAMMA1: usize = 2u32.pow(19) as usize;

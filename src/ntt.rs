@@ -1,6 +1,6 @@
+use crate::helpers;
 use crate::helpers::reduce_q;
 use crate::types::{Zero, R, T};
-use crate::{helpers};
 
 
 /// Algorithm 35 NTT(w) on page 36.
@@ -84,7 +84,7 @@ pub(crate) fn inv_ntt(w_hat: &T) -> R {
             // 10: zeta ← −ζ^{brv(k)} mod q
             //let zeta = -helpers::pow_mod_q(ZETA, (k as u8).reverse_bits());
             let zeta = -(helpers::ZETA_TABLE[k]); //pow_mod_q(ZETA, (k as u8).reverse_bits());
-            // 11: for j from start to start + len − 1 do
+                                                  // 11: for j from start to start + len − 1 do
             for j in start..(start + len) {
                 // 12: t ← w_j
                 let t = w[j];

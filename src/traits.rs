@@ -4,6 +4,7 @@
 use rand_core::CryptoRngCore;
 #[cfg(feature = "default-rng")]
 use rand_core::OsRng;
+//use crate::ml_dsa_44::PrivateKey;
 
 
 /// The `KeyGen` trait is defined to allow trait objects.
@@ -29,6 +30,15 @@ pub trait KeyGen {
     fn try_keygen_with_rng_vt(
         rng: &mut impl CryptoRngCore,
     ) -> Result<(Self::PublicKey, Self::PrivateKey), &'static str>;
+}
+
+/// under dev
+pub trait PreGen: Signer + SerDes {
+    /// stand-in for secret key signer
+    type PreCompute;
+
+    /// wogga
+    fn gen_precompute(&self) -> Self::PreCompute;
 }
 
 
@@ -80,7 +90,9 @@ pub trait SerDes {
     type ByteArray;
 
     /// Produces a byte array of fixed-size specific to the struct being serialized.
-    fn into_bytes(self) -> Self::ByteArray;
+    #[allow(clippy::wrong_self_convention)]
+    fn into_bytes(&self) -> Self::ByteArray;
+
     /// Consumes a byte array of fixed-size specific to the struct being deserialized; performs validation
     /// # Errors
     /// Returns an error when random number generator fails
