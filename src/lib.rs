@@ -66,8 +66,8 @@ macro_rules! functionality {
         pub struct KG(); // Arguable how useful an empty struct+trait is...
 
 
-        /// Empty struct to enable `KeyGen` trait objects. <br>
-        /// Implements the [`crate::traits::Precompute`] trait.
+        /// Precomputed private key material. <br>
+        /// Implements the [`crate::traits::Signer`] trait.
         #[derive(Zeroize, ZeroizeOnDrop)]
         pub struct PrivatePreCompute([u8; SK_LEN]);
 
