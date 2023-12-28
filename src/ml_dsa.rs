@@ -2,7 +2,7 @@ use crate::encodings::{
     pk_decode, pk_encode, sig_decode, sig_encode, sk_decode, sk_encode, w1_encode,
 };
 use crate::hashing::{expand_a, expand_mask, expand_s, h_xof, sample_in_ball};
-use crate::helpers::{bitlen, mod_pm, reduce_q};
+use crate::helpers::{bitlen, ensure, mod_pm, reduce_q};
 use crate::high_low::{high_bits, low_bits, make_hint, power2round, use_hint};
 use crate::ntt::{inv_ntt, ntt};
 use crate::types::{Zero, R, T};
@@ -344,7 +344,7 @@ pub(crate) fn verify<
         return Ok(false);
     };
     let i_norm = helpers::infinity_norm(&z);
-    assert!(i_norm < GAMMA1 as i32);
+    ensure!(i_norm < GAMMA1 as i32, "Algorithm3: i_norm out of range");
     // 4: end if
 
     // 5: cap_a_hat ← ExpandA(ρ)    ▷ A is generated and stored in NTT representation as cap_A_hat
