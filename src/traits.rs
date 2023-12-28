@@ -49,7 +49,7 @@ pub trait Signer {
 
     /// Attempt to sign the given message, returning a digital signature on
     /// success, or an error if something went wrong. This function utilizes the default OS RNG and
-    /// operates in constant time with respect to the `PrivateKey` (only; work in progress).
+    /// operates in constant time with respect to the `PrivateKey` only (not including rejection loop; work in progress).
     ///
     /// # Errors
     /// Returns an error when random number generator fails

@@ -27,6 +27,9 @@ jobs:
         target:
           - thumbv7em-none-eabi
           - wasm32-unknown-unknown
+          - mips-unknown-linux-uclibc
+          - powerpc64-ibm-aix
+          - riscv64gc-unknown-none-elf
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master

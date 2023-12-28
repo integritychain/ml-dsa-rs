@@ -5,7 +5,6 @@ use crate::types::{Zero, R, T};
 
 /// Algorithm 35 NTT(w) on page 36.
 /// Computes the Number-Theoretic Transform.
-#[allow(clippy::cast_possible_truncation)]
 pub(crate) fn ntt(w: &R) -> T {
     // Input: polynomial w(X) = ∑_{j=0}^{255} w_j X^j ∈ Rq
     // Output: w_hat = (w_hat[0], . . . , w_hat[255]) ∈ Tq
@@ -104,10 +103,10 @@ pub(crate) fn inv_ntt(w_hat: &T) -> R {
       // 21: f ← 8347681          ▷ f = 256^{−1} mod q
     let f = 8_347_681_i64;
     // 22: for j from 0 to 255 do
-    #[allow(clippy::needless_range_loop)]
-    for j in 0..=255 {
-        // 23: wj ← f ·wj
-        w[j] = reduce_q(f * w[j] as i64);
-    } // 24: end for
+    // 23: wj ← f ·wj
+    for i in &mut w {
+        *i = reduce_q(f * *i as i64);
+    }
+    // 24: end for
     w // 25: return w
 }

@@ -16,7 +16,7 @@ use sha3::digest::XofReader;
 ///
 /// Input: `rng` a cryptographically-secure random number generator. <br>
 /// Output: Public key, `pk` ∈ B^{32+32k(bitlen(q−1)−d)},
-/// and private key, `sk` ∈ B^{32+32+64+32·((ℓ+k)·bitlen(2η)+dk)}
+/// and private key, `sk` ∈ `B^{32+32+64+32·((ℓ+k)·bitlen(2η)+dk)}`
 pub(crate) fn key_gen<
     const ETA: usize,
     const K: usize,
@@ -86,8 +86,8 @@ pub(crate) fn key_gen<
 /// Algorithm 2 ML-DSA.Sign(sk, M) on page 17
 /// Generates a signature for a message M.
 ///
-/// Input: Private key, `sk` ∈ B^{32+32+64+32·((ℓ+k)·bitlen(2η)+dk)} and the message `M` ∈ {0,1}^∗ <br>
-/// Output: Signature, `σ` ∈ B^{32+ℓ·32·(1+bitlen(gamma_1 −1))+ω+k}
+/// Input: Private key, `sk` ∈ `B^{32+32+64+32·((ℓ+k)·bitlen(2η)+dk)}` and the message `M` ∈ {0,1}^∗ <br>
+/// Output: Signature, `σ` ∈ `B^{32+ℓ·32·(1+bitlen(gamma_1 −1))+ω+k}`
 #[allow(clippy::similar_names)]
 #[allow(clippy::many_single_char_names)]
 #[allow(clippy::too_many_lines)]
@@ -156,10 +156,11 @@ pub(crate) fn sign<
     let mut k = 0;
 
     // 10: (z, h) ← ⊥
-    let (mut z, mut h) = (None::<[R; L]>, None::<[R; K]>);
+    let (mut z, mut h) = ([R::zero(); L], [R::zero(); K]); // z & h are raw values;
     let mut c_tilde = [0u8; 2 * 256 / 8]; //[0u8; 2 * LAMBDA / 8];
                                           // 11: while (z, h) = ⊥ do          ▷ Rejection sampling loop
-    while z.is_none() & h.is_none() {
+                                          // rather than setting (z, h) = ⊥, we just do a loop with continues where needed
+    loop {
         //
         // 12: y ← ExpandMask(ρ′ , κ)
         let y: [R; L] = expand_mask::<GAMMA1, L>(&rho_prime, k)?;
@@ -204,10 +205,9 @@ pub(crate) fn sign<
 
         // 19: ⟨⟨c_s_1 ⟩⟩ ← NTT−1 (c_hat ◦ s_hat_1)
         let mut x: [T; L] = [T::zero(); L];
-        for i in 0..L {
-            #[allow(clippy::needless_range_loop)]
-            for j in 0..256 {
-                x[i][j] = (c_hat[j] as i64 * s_hat_1[i][j] as i64).rem_euclid(QI as i64) as i32;
+        for (xi, sh1i) in x.iter_mut().zip(s_hat_1.iter()) {
+            for (xij, (chj, sh1ij)) in xi.iter_mut().zip(c_hat.iter().zip(sh1i.iter())) {
+                *xij = reduce_q(*chj as i64 * *sh1ij as i64);
             }
         }
         let mut c_s_1: [R; L] = [R::zero(); L];
@@ -217,10 +217,9 @@ pub(crate) fn sign<
 
         // 20: ⟨⟨c_s_2 ⟩⟩ ← NTT−1 (c_hat ◦ s_hat_2)
         let mut x: [T; K] = [T::zero(); K];
-        for i in 0..K {
-            #[allow(clippy::needless_range_loop)]
-            for j in 0..256 {
-                x[i][j] = (c_hat[j] as i64 * s_hat_2[i][j] as i64).rem_euclid(QI as i64) as i32;
+        for (xi, sh2i) in x.iter_mut().zip(s_hat_2.iter()) {
+            for (xij, (chj, sh2ij)) in xi.iter_mut().zip(c_hat.iter().zip(sh2i.iter())) {
+                *xij = reduce_q(*chj as i64 * *sh2ij as i64);
             }
         }
         let mut c_s_2: [R; K] = [R::zero(); K];
@@ -229,13 +228,12 @@ pub(crate) fn sign<
         }
 
         // 21: z ← y + ⟨⟨c_s_1⟩⟩    ▷ Signer’s response
-        let mut x: [R; L] = [R::zero(); L];
+        //let mut x: [R; L] = [R::zero(); L];
         for i in 0..L {
             for j in 0..256 {
-                x[i][j] = (y[i][j] + c_s_1[i][j]).rem_euclid(QI);
+                z[i][j] = (y[i][j] + c_s_1[i][j]).rem_euclid(QI);
             }
         }
-        z = Some(x);
 
         // 22: r0 ← LowBits(w − ⟨⟨c_s_2⟩⟩)
         let mut r0: [R; K] = [R::zero(); K];
@@ -246,66 +244,67 @@ pub(crate) fn sign<
         }
 
         // 23: if ||z||∞ ≥ Gamma1 − β or ||r0||∞ ≥ Gamma2 − β then (z, h) ← ⊥    ▷ Validity checks
-        let z_norm = helpers::infinity_norm(&z.ok_or("z scrambled")?);
+        let z_norm = helpers::infinity_norm(&z);
         let r0_norm = helpers::infinity_norm(&r0);
         if (z_norm >= (GAMMA1 as i32 - BETA as i32)) | (r0_norm >= (GAMMA2 as i32 - BETA as i32)) {
-            (z, h) = (None, None);
+            k += L as u32;
+            continue;
             //
-            // 24: else
-        } else {
-            //
-            // 25: ⟨⟨c_t_0 ⟩⟩ ← NTT−1 (c_hat ◦ t_hat_0)
-            let mut x: [T; K] = [T::zero(); K];
-            for i in 0..K {
-                #[allow(clippy::needless_range_loop)]
-                for j in 0..256 {
-                    x[i][j] = (c_hat[j] as i64 * t_hat_0[i][j] as i64).rem_euclid(QI as i64) as i32;
-                }
+            // 24: else  ... not really needed, with 'continue' above
+        }
+        //
+        // 25: ⟨⟨c_t_0 ⟩⟩ ← NTT−1 (c_hat ◦ t_hat_0)
+        let mut x: [T; K] = [T::zero(); K];
+        for (xi, th0i) in x.iter_mut().zip(t_hat_0.iter()) {
+            for (xij, (chj, th0ij)) in xi.iter_mut().zip(c_hat.iter().zip(th0i.iter())) {
+                *xij = reduce_q(*chj as i64 * *th0ij as i64);
             }
-            let mut c_t_0 = [R::zero(); K];
-            for i in 0..K {
-                c_t_0[i] = inv_ntt(&x[i]);
-            }
+        }
+        let mut c_t_0 = [R::zero(); K];
+        for i in 0..K {
+            c_t_0[i] = inv_ntt(&x[i]);
+        }
 
-            // 26: h ← MakeHint(−⟨⟨c_t_0⟩⟩, w − ⟨⟨c_s_2⟩⟩ + ⟨⟨c_t_0⟩⟩)    ▷ Signer’s hint
-            let mut mct0 = [R::zero(); K];
-            let mut wcc = [R::zero(); K];
-            let mut hh: [R; K] = [R::zero(); K]; // hh should be R_2
-            for i in 0..K {
-                for j in 0..256 {
-                    mct0[i][j] = (QI - c_t_0[i][j]).rem_euclid(QI);
-                    wcc[i][j] = (w[i][j] - c_s_2[i][j] + c_t_0[i][j]).rem_euclid(QI);
-                    hh[i][j] = make_hint::<GAMMA2>(mct0[i][j], wcc[i][j]) as i32;
-                }
+        // 26: h ← MakeHint(−⟨⟨c_t_0⟩⟩, w − ⟨⟨c_s_2⟩⟩ + ⟨⟨c_t_0⟩⟩)    ▷ Signer’s hint
+        let mut mct0 = [R::zero(); K];
+        let mut wcc = [R::zero(); K];
+        //let mut hh: [R; K] = [R::zero(); K]; // hh should be R_2
+        for i in 0..K {
+            for j in 0..256 {
+                mct0[i][j] = (QI - c_t_0[i][j]).rem_euclid(QI);
+                wcc[i][j] = (w[i][j] - c_s_2[i][j] + c_t_0[i][j]).rem_euclid(QI);
+                h[i][j] = make_hint::<GAMMA2>(mct0[i][j], wcc[i][j]) as i32;
             }
-            h = Some(hh);
+        }
+        //h = Some(hh);
 
-            // 27: if ||⟨⟨c_t_0⟩⟩||∞ ≥ Gamma2 or the number of 1’s in h is greater than ω, then (z, h) ← ⊥
-            if (helpers::infinity_norm(&c_t_0) >= GAMMA2 as i32)
-                | (h.ok_or("h scrambled")?.iter().flatten().filter(|i| (**i).abs() == 1).count()
-                    > OMEGA)
-            {
-                (z, h) = (None::<[R; L]>, None::<[R; K]>);
-            } // 28: end if
-              //
-        } // 29: end if
+        // 27: if ||⟨⟨c_t_0⟩⟩||∞ ≥ Gamma2 or the number of 1’s in h is greater than ω, then (z, h) ← ⊥
+        if (helpers::infinity_norm(&c_t_0) >= GAMMA2 as i32)
+            | (h.iter().flatten().filter(|i| (**i).abs() == 1).count()
+                > OMEGA)
+        {
+            k += L as u32;
+            continue;
+        } // 28: end if
+          //
+          // 29: end if
           //
           // 30: κ ← κ + ℓ ▷ Increment counter
-        k += L as u32;
+          // if we made it here, we passed the 'continue' conditions, so have a solution
+        break;
     } // 31: end while
       //
       // 32: σ ← sigEncode(c_tilde, z mod± q, h)
     let mut zmq: [R; L] = [R::zero(); L];
-    let zz = z.ok_or("z scrambled 2")?;
     for i in 0..L {
         for j in 0..256 {
-            zmq[i][j] = mod_pm(zz[i][j], QU);
+            zmq[i][j] = mod_pm(z[i][j], QU);
         }
     }
     let sig = sig_encode::<GAMMA1, K, L, LAMBDA, OMEGA, SIG_LEN>(
         &c_tilde[0..2 * LAMBDA / 8],
         &zmq,
-        &h.ok_or("h scrambled 3")?,
+        &h,
     )?;
 
     Ok(sig) // 33: return σ
@@ -384,12 +383,13 @@ pub(crate) fn verify<
             ntt_t1_d2[i][j] = reduce_q(ntt_t1[i][j] as i64 * 2i32.pow(D) as i64);
         }
     }
+
     let ntt_c: T = ntt(&c);
+
     let mut ntt_ct: [T; K] = [T::zero(); K];
-    for i in 0..K {
-        #[allow(clippy::needless_range_loop)]
-        for j in 0..256 {
-            ntt_ct[i][j] = reduce_q(ntt_c[j] as i64 * ntt_t1_d2[i][j] as i64);
+    for (ntci, ntdi) in ntt_ct.iter_mut().zip(ntt_t1_d2.iter()) {
+        for (ntcij, (ncj, ntdij)) in ntci.iter_mut().zip(ntt_c.iter().zip(ntdi.iter())) {
+            *ntcij = reduce_q(*ncj as i64 * *ntdij as i64);
         }
     }
 

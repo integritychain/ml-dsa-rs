@@ -42,11 +42,9 @@ pub const fn bitlen(a: usize) -> usize { a.ilog2() as usize + 1 }
 /// element m′ ∈ Z in the range −α/2 < m′ ≤ α/2 such that m and m′ are congruent
 /// modulo α.  'ready to optimize'
 pub fn mod_pm(m: i32, a: u32) -> i32 {
-    let t = m.rem_euclid(a as i32); // % a;
+    let t = m.rem_euclid(a as i32);
     let a = a as i32;
-    let mp = if t <= (a / 2) { t } else { t - a };
-    assert_eq!((mp + a) as u32 % (a as u32), t as u32);
-    mp
+    if t <= (a / 2) { t } else { t - a }
 }
 
 
@@ -56,14 +54,12 @@ pub(crate) fn mat_vec_mul<const K: usize, const L: usize>(
     a_hat: &[[[i32; 256]; L]; K], u_hat: &[[i32; 256]; L],
 ) -> [[i32; 256]; K] {
     let mut w_hat = [[0i32; 256]; K];
-    #[allow(clippy::needless_range_loop)]
     for i in 0..K {
         #[allow(clippy::needless_range_loop)]
         for j in 0..L {
-            //let tmp = multiply_ntts(&a_hat[i][j], &u_hat[j]);
             let mut tmp = [0i32; 256];
             tmp.iter_mut().enumerate().for_each(|(m, e)| {
-                *e = reduce_q(a_hat[i][j][m] as i64 * u_hat[j][m] as i64); //.rem_euclid(QI as i64) as i32;
+                *e = reduce_q(a_hat[i][j][m] as i64 * u_hat[j][m] as i64);
             });
             for k in 0..256 {
                 w_hat[i][k] = (w_hat[i][k] + tmp[k]).rem_euclid(QI);
@@ -88,12 +84,9 @@ pub(crate) fn vec_add<const K: usize>(vec_a: &[R; K], vec_b: &[R; K]) -> [R; K] 
 
 pub fn infinity_norm<const ROW: usize, const COL: usize>(w: &[[i32; COL]; ROW]) -> i32 {
     let mut result = 0;
-    #[allow(clippy::needless_range_loop)]
-    for i in 0..w.len() {
-        let inner = w[i];
-        #[allow(clippy::needless_range_loop)]
-        for j in 0..inner.len() {
-            let z_q = mod_pm(inner[j], QU).abs();
+    for row in w {
+        for element in row {
+            let z_q = mod_pm(*element, QU).abs();
             result = if z_q > result { z_q } else { result };
         }
     }
@@ -103,7 +96,6 @@ pub fn infinity_norm<const ROW: usize, const COL: usize>(w: &[[i32; COL]; ROW]) 
 
 /// HAC Algorithm 14.76 Right-to-left binary exponentiation mod Q.
 #[must_use]
-#[allow(clippy::cast_possible_truncation)]
 pub(crate) const fn pow_mod_q(g: i32, e: u8) -> i32 {
     let g = g as i64;
     let mut result = 1;
@@ -115,7 +107,7 @@ pub(crate) const fn pow_mod_q(g: i32, e: u8) -> i32 {
         };
         e >>= 1;
         if e != 0 {
-            s = (s * s).rem_euclid(QU as i64);
+            s = (s * s).rem_euclid(QI as i64);
         };
     }
     result.rem_euclid(QI as i64) as i32

@@ -44,7 +44,7 @@ macro_rules! functionality {
 
         /// Correctly sized private key specific to the target parameter set. <br>
         /// Implements the [`crate::traits::Signer`] and [`crate::traits::SerDes`] traits.
-        #[derive(Zeroize, ZeroizeOnDrop)]
+        #[derive(Clone, Zeroize, ZeroizeOnDrop)]
         pub struct PrivateKey([u8; SK_LEN]);
 
 

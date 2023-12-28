@@ -2,6 +2,8 @@ use ml_dsa_rs::traits::{KeyGen, Signer, Verifier};
 use ml_dsa_rs::{ml_dsa_44, ml_dsa_65, ml_dsa_87};
 use rand_chacha::rand_core::SeedableRng;
 
+// cargo flamegraph --test integration
+
 #[test]
 fn test_44_rounds() {
     let mut msg = [0u8, 1, 2, 3, 4, 5, 6, 7];

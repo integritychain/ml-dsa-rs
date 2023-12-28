@@ -157,12 +157,11 @@ pub(crate) fn rej_bounded_poly<const ETA: usize>(rhos: &[&[u8]]) -> R {
 pub(crate) fn expand_a<const K: usize, const L: usize>(rho: &[u8; 32]) -> [[T; L]; K] {
     let mut cap_a_hat = [[T::zero(); L]; K];
     // 1: for r from 0 to k − 1 do
-    #[allow(clippy::needless_range_loop)]
-    for r in 0..K {
+    for (r, a_row) in cap_a_hat.iter_mut().enumerate().take(K) {
         // 2: for s from 0 to ℓ − 1 do
-        for s in 0..L {
+        for (s, a_element) in a_row.iter_mut().enumerate().take(L) {
             // 3: A_hat[r, s] ← RejNTTPoly(ρ||IntegerToBits(s, 8)||IntegerToBits(r, 8))
-            cap_a_hat[r][s] = rej_ntt_poly(&[&rho[..], &[s as u8], &[r as u8]]);
+            *a_element = rej_ntt_poly(&[&rho[..], &[s as u8], &[r as u8]]);
             // 4: end for
         }
         // 5: end for
@@ -184,18 +183,16 @@ pub(crate) fn expand_s<const ETA: usize, const K: usize, const L: usize>(
 ) -> Result<([R; L], [R; K]), &'static str> {
     let (mut s1, mut s2) = ([R::zero(); L], [R::zero(); K]);
     // 1: for r from 0 to ℓ − 1 do
-    #[allow(clippy::needless_range_loop)]
-    for r in 0..L {
+    for (r, s1r) in s1.iter_mut().enumerate().take(L) {
         // 2: s1[r] ← RejBoundedPoly(ρ||IntegerToBits(r, 16))
-        s1[r] = rej_bounded_poly::<ETA>(&[rho, &[r as u8], &[0]]);
+        *s1r = rej_bounded_poly::<ETA>(&[rho, &[r as u8], &[0]]);
         // 3: end for
     }
     // 4: for r from 0 to k − 1 do
-    #[allow(clippy::needless_range_loop)]
-    for r in 0..K {
+    for (r, s2r) in s2.iter_mut().enumerate().take(K) {
         // 5: s2[r] ← RejBoundedPoly(ρ||IntegerToBits(r + ℓ, 16))
         ensure!((r + L) < 255, "Algorithm 27: r + L out of range u8");
-        s2[r] = rej_bounded_poly::<ETA>(&[rho, &[(r + L) as u8], &[0]]);
+        *s2r = rej_bounded_poly::<ETA>(&[rho, &[(r + L) as u8], &[0]]);
         // 6: end for
     }
     ensure!(
