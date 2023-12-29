@@ -1,4 +1,4 @@
-use crate::helpers::{mod_pm, reduce_q};
+use crate::helpers::{mod_pm, reduce_q32, reduce_q64};
 use crate::types::Zq;
 use crate::{D, QI, QU};
 
@@ -13,7 +13,7 @@ use crate::{D, QI, QU};
 /// Output: Integers `(r1, r0)`.
 pub(crate) fn power2round(r: Zq) -> (Zq, Zq) {
     // 1: r+ ← r mod q
-    let rp = reduce_q(r.into());
+    let rp = reduce_q64(r.into());
     // 2: r0 ← r+ mod±2^d
     let r0 = mod_pm(rp, 2_u32.pow(D));
     // 3: return ((r+ − r0)/2^d, r0)
@@ -29,7 +29,7 @@ pub(crate) fn power2round(r: Zq) -> (Zq, Zq) {
 /// Output: Integers `(r1, r0)`.
 pub(crate) fn decompose<const GAMMA2: usize>(r: Zq, r1: &mut Zq, r0: &mut Zq) {
     // 1: r+ ← r mod q
-    let rp = r.rem_euclid(QI);
+    let rp = r.rem_euclid(QI); // TODO: Sensitive -- reduce_q32(r);
     // 2: r0 ← r+ mod±(2γ_2)
     *r0 = mod_pm(rp, 2 * GAMMA2 as u32);
     // 3: if r+ − r0 = q − 1 then
@@ -83,7 +83,7 @@ pub(crate) fn make_hint<const GAMMA2: usize>(z: Zq, r: Zq) -> bool {
     // 1: r1 ← HighBits(r)
     let r1 = high_bits::<GAMMA2>(r);
     // 2: v1 ← HighBits(r + z)
-    let v1 = high_bits::<GAMMA2>((r + z).rem_euclid(QI));
+    let v1 = high_bits::<GAMMA2>(reduce_q32(r + z));
     // 3: return [[r1 != v1]]
     r1 != v1
 }

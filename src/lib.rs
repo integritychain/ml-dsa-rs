@@ -12,7 +12,7 @@
 // Roadmap
 //  0. Stay on top of FIPS 204 updates
 //  1. Break-out precompute signing
-//  2. Clean up rem_euclid instances
+//  2. Clean up remaining rem_euclid instances
 //  3. More robust unit testing
 //  4. infinity_norm() -> check_infinity_norm() w/ early exit
 

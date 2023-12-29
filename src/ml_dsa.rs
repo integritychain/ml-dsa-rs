@@ -2,7 +2,7 @@ use crate::encodings::{
     pk_decode, pk_encode, sig_decode, sig_encode, sk_decode, sk_encode, w1_encode,
 };
 use crate::hashing::{expand_a, expand_mask, expand_s, h_xof, sample_in_ball};
-use crate::helpers::{bitlen, ensure, mod_pm, reduce_q};
+use crate::helpers::{bitlen, ensure, mod_pm, reduce_q32, reduce_q64};
 use crate::high_low::{high_bits, low_bits, make_hint, power2round, use_hint};
 use crate::ntt::{inv_ntt, ntt};
 use crate::types::{Zero, R, T};
@@ -178,7 +178,7 @@ pub(crate) fn sign<
         let mut x: [T; L] = [T::zero(); L];
         for (xi, sh1i) in x.iter_mut().zip(s_hat_1.iter()) {
             for (xij, (chj, sh1ij)) in xi.iter_mut().zip(c_hat.iter().zip(sh1i.iter())) {
-                *xij = reduce_q(*chj as i64 * *sh1ij as i64);
+                *xij = reduce_q64(*chj as i64 * *sh1ij as i64);
             }
         }
         let c_s_1 = inv_ntt(&x);
@@ -187,7 +187,7 @@ pub(crate) fn sign<
         let mut x: [T; K] = [T::zero(); K];
         for (xi, sh2i) in x.iter_mut().zip(s_hat_2.iter()) {
             for (xij, (chj, sh2ij)) in xi.iter_mut().zip(c_hat.iter().zip(sh2i.iter())) {
-                *xij = reduce_q(*chj as i64 * *sh2ij as i64);
+                *xij = reduce_q64(*chj as i64 * *sh2ij as i64);
             }
         }
         let c_s_2 = inv_ntt(&x);
@@ -195,7 +195,7 @@ pub(crate) fn sign<
         // 21: z ← y + ⟨⟨c_s_1⟩⟩    ▷ Signer’s response
         for i in 0..L {
             for j in 0..256 {
-                z[i][j] = (y[i][j] + c_s_1[i][j]).rem_euclid(QI);
+                z[i][j] = reduce_q32(y[i][j] + c_s_1[i][j]);
             }
         }
 
@@ -203,7 +203,7 @@ pub(crate) fn sign<
         let mut r0: [R; K] = [R::zero(); K];
         for i in 0..K {
             for j in 0..256 {
-                r0[i][j] = low_bits::<GAMMA2>((QI + w[i][j] - c_s_2[i][j]).rem_euclid(QI));
+                r0[i][j] = low_bits::<GAMMA2>(reduce_q32(w[i][j] - c_s_2[i][j]));
             }
         }
 
@@ -219,7 +219,7 @@ pub(crate) fn sign<
         let mut x: [T; K] = [T::zero(); K];
         for (xi, th0i) in x.iter_mut().zip(t_hat_0.iter()) {
             for (xij, (chj, th0ij)) in xi.iter_mut().zip(c_hat.iter().zip(th0i.iter())) {
-                *xij = reduce_q(*chj as i64 * *th0ij as i64);
+                *xij = reduce_q64(*chj as i64 * *th0ij as i64);
             }
         }
         let c_t_0 = inv_ntt(&x);
@@ -229,8 +229,8 @@ pub(crate) fn sign<
         let mut wcc = [R::zero(); K];
         for i in 0..K {
             for j in 0..256 {
-                mct0[i][j] = (QI - c_t_0[i][j]).rem_euclid(QI);
-                wcc[i][j] = (w[i][j] - c_s_2[i][j] + c_t_0[i][j]).rem_euclid(QI);
+                mct0[i][j] = reduce_q32(QI - c_t_0[i][j]);
+                wcc[i][j] = reduce_q32(w[i][j] - c_s_2[i][j] + c_t_0[i][j]);
                 h[i][j] = make_hint::<GAMMA2>(mct0[i][j], wcc[i][j]) as i32;
             }
         }
@@ -328,7 +328,7 @@ pub(crate) fn verify<
     let mut ntt_t1_d2: [T; K] = [T::zero(); K];
     for i in 0..K {
         for j in 0..256 {
-            ntt_t1_d2[i][j] = reduce_q(ntt_t1[i][j] as i64 * 2i32.pow(D) as i64);
+            ntt_t1_d2[i][j] = reduce_q64(ntt_t1[i][j] as i64 * 2i32.pow(D) as i64);
         }
     }
 
@@ -337,7 +337,7 @@ pub(crate) fn verify<
     let mut ntt_ct: [T; K] = [T::zero(); K];
     for (ntci, ntdi) in ntt_ct.iter_mut().zip(ntt_t1_d2.iter()) {
         for (ntcij, (ncj, ntdij)) in ntci.iter_mut().zip(ntt_c.iter().zip(ntdi.iter())) {
-            *ntcij = reduce_q(*ncj as i64 * *ntdij as i64);
+            *ntcij = reduce_q64(*ncj as i64 * *ntdij as i64);
         }
     }
 

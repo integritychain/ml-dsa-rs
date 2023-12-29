@@ -22,7 +22,8 @@ pub(crate) fn is_in_range(w: &R, lo: u32, hi: u32) -> bool {
 
 /// Barrett reduction
 const M: i128 = 2i128.pow(64) / (QI as i128);
-pub(crate) fn reduce_q(a: i64) -> i32 {
+#[inline(always)]
+pub(crate) const fn reduce_q64(a: i64) -> i32 {
     let q = (a as i128 * M) >> 64;
     let res = (a - (q as i64) * (QI as i64)) as i32;
     if res >= QI {
@@ -30,6 +31,21 @@ pub(crate) fn reduce_q(a: i64) -> i32 {
     } else {
         res
     }
+}
+
+/// Reduce 32-bit value mod Q
+// Sketch
+// Let Q = 2^23 - 2^13 + 1 = 0 mod Q;
+// So, 2^23 - 2^13 = -1 mod Q
+//      MSB * 2^23 = MSB(2^13 - 1) mod Q
+
+// Let a = MSB*2^23 + LSB
+//     x = (MSB+1)*2^23 = MSB+1
+//   res = MSB*2^23 + LSB - (MSB+1)(2^23 - 2^13 + 1)  <-- closer!!
+#[inline(always)]
+pub(crate) const fn reduce_q32(a: i32) -> i32 {
+    let x = (a + (1 << 22)) >> 23;
+    a - x * QI
 }
 
 
@@ -63,10 +79,10 @@ pub(crate) fn mat_vec_mul<const K: usize, const L: usize>(
         for j in 0..L {
             let mut tmp = [0i32; 256];
             tmp.iter_mut().enumerate().for_each(|(m, e)| {
-                *e = reduce_q(a_hat[i][j][m] as i64 * u_hat[j][m] as i64);
+                *e = reduce_q64(a_hat[i][j][m] as i64 * u_hat[j][m] as i64);
             });
             for k in 0..256 {
-                w_hat[i][k] = (w_hat[i][k] + tmp[k]).rem_euclid(QI);
+                w_hat[i][k] = reduce_q32(w_hat[i][k] + tmp[k]);
             }
         }
     }
@@ -79,7 +95,7 @@ pub(crate) fn vec_add<const K: usize>(vec_a: &[R; K], vec_b: &[R; K]) -> [R; K] 
     let mut result = [R::zero(); K];
     for i in 0..vec_a.len() {
         for j in 0..vec_a[i].len() {
-            result[i][j] = (vec_a[i][j] + vec_b[i][j]).rem_euclid(QI);
+            result[i][j] = reduce_q32(vec_a[i][j] + vec_b[i][j]);
         }
     }
     result
@@ -114,7 +130,7 @@ const fn pow_mod_q(g: i32, e: u8) -> i32 {
             s = (s * s).rem_euclid(QI as i64);
         };
     }
-    result.rem_euclid(QI as i64) as i32
+    reduce_q64(result)
 }
 
 

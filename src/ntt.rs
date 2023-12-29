@@ -1,5 +1,5 @@
 use crate::helpers;
-use crate::helpers::reduce_q;
+use crate::helpers::reduce_q64;
 use crate::types::{R, T};
 
 
@@ -31,7 +31,7 @@ pub(crate) fn ntt<const X: usize>(w: &[R; X]) -> [T; X] {
                 // 11: for j from start to start + len − 1 do
                 for j in start..(start + len) {
                     // 12: t ← zeta · w_hat[ j + len]
-                    let t = reduce_q(zeta * w_hat[j + len] as i64);
+                    let t = reduce_q64(zeta * w_hat[j + len] as i64);
                     // 13: w_hat[j + len] ← w_hat[j] − t
                     w_hat[j + len] = w_hat[j] - t;
                     // 14: w_hat[j] ← w_hat[j] + t
@@ -86,7 +86,7 @@ pub(crate) fn inv_ntt<const X: usize>(w_hat: &[T; X]) -> [R; X] {
                     // 14: w_{j+len} ← t − w_{j+len}
                     w[j + len] = t - w[j + len];
                     // 15: w_{j+len} ← zeta · w_{j+len}
-                    w[j + len] = reduce_q(zeta as i64 * w[j + len] as i64);
+                    w[j + len] = reduce_q64(zeta as i64 * w[j + len] as i64);
                     // 16: end for
                 }
                 // 17: start ← start + 2 · len
@@ -102,7 +102,7 @@ pub(crate) fn inv_ntt<const X: usize>(w_hat: &[T; X]) -> [R; X] {
         // 22: for j from 0 to 255 do
         // 23: wj ← f · wj
         for i in &mut *w {
-            *i = reduce_q(f * *i as i64);
+            *i = reduce_q64(f * *i as i64);
         }
         // 24: end for
     }
