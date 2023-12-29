@@ -53,7 +53,7 @@ The Rust [Documentation][docs-link] lives under each **Module** corresponding to
 ## Notes
 
 * This crate is fully functional and corresponds to the first initial public draft of FIPS 204.    
-* Constant-time and precompute signing optimizations are a work-in-progress
+* Constant-time assurances target the source-code level only, and are a work in progress.
 * Note that FIPS 204 places specific requirements on randomness per section 3.5.1, hence the exposed `RNG`.
 * Requires Rust **1.72** or higher. The minimum supported Rust version may be changed in the future, but 
 it will be done with a minor version bump.

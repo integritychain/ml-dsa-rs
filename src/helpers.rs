@@ -20,7 +20,7 @@ pub(crate) fn is_in_range(w: &R, lo: u32, hi: u32) -> bool {
 }
 
 
-/// Barrett reduction
+/// Barrett reduction  TODO revisit
 const M: i128 = 2i128.pow(64) / (QI as i128);
 #[inline(always)]
 pub(crate) const fn reduce_q64(a: i64) -> i32 {
@@ -33,18 +33,23 @@ pub(crate) const fn reduce_q64(a: i64) -> i32 {
     }
 }
 
-/// Reduce 32-bit value mod Q
-// Sketch
-// Let Q = 2^23 - 2^13 + 1 = 0 mod Q;
-// So, 2^23 - 2^13 = -1 mod Q
-//      MSB * 2^23 = MSB(2^13 - 1) mod Q
+/// Barrett reduction  TODO revisit http://www.acsel-lab.com/arithmetic/arith18/papers/ARITH18_Hasenplaugh.pdf
+// #[inline(always)]
+// pub(crate) const fn reduce_q64a(a: i64) -> i32 {
+//     let m = 2i64.pow(32) / 8_380_417_i64;
+//     let q = (a * m) >> 32;
+//     let res = (a - q * 8_380_417) as i32;
+//     if res >= QI {
+//         res - QI
+//     } else {
+//         res
+//     }
+// }
 
-// Let a = MSB*2^23 + LSB
-//     x = (MSB+1)*2^23 = MSB+1
-//   res = MSB*2^23 + LSB - (MSB+1)(2^23 - 2^13 + 1)  <-- closer!!
+/// Reduce 32-bit value mod Q --->   -q < result < q  TODO revisit
 #[inline(always)]
 pub(crate) const fn reduce_q32(a: i32) -> i32 {
-    let x = (a + (1 << 22)) >> 23;
+    let x = (a + (1 << 22)) >> 23; // +2^22 ensures quotient is never 'too low'
     a - x * QI
 }
 

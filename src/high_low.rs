@@ -30,7 +30,7 @@ pub(crate) fn power2round(r: Zq) -> (Zq, Zq) {
 pub(crate) fn decompose<const GAMMA2: usize>(r: Zq, r1: &mut Zq, r0: &mut Zq) {
     // 1: r+ ← r mod q
     let rp = r.rem_euclid(QI); // TODO: Sensitive -- reduce_q32(r);
-    // 2: r0 ← r+ mod±(2γ_2)
+                               // 2: r0 ← r+ mod±(2γ_2)
     *r0 = mod_pm(rp, 2 * GAMMA2 as u32);
     // 3: if r+ − r0 = q − 1 then
     if (rp - *r0) == (QU as i32 - 1) {

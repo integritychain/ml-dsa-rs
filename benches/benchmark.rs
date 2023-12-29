@@ -54,7 +54,7 @@ criterion_main!(benches);
 //    ml_dsa 65 verify        time:   [436.95 µs 437.18 µs 437.46 µs]
 //    ml_dsa 87 verify        time:   [695.26 µs 697.27 µs 701.48 µs]
 
-// With reduce_q and zeta precomputes
+// As of 12-29-23
 //   ml_dsa_44 keygen        time:   [102.44 µs 102.49 µs 102.55 µs]
 //   ml_dsa_65 keygen        time:   [191.07 µs 191.10 µs 191.14 µs]
 //   ml_dsa_87 keygen        time:   [280.13 µs 280.36 µs 280.65 µs]
