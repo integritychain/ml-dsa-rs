@@ -1,4 +1,4 @@
-// Note: These types will be completely reworked!!!!
+// Note: These types will be reworked; probably struct shells
 
 pub(crate) trait Zero {
     fn zero() -> Self;

@@ -46,15 +46,9 @@ pub(crate) fn key_gen<
     let (s_1, s_2): ([R; L], [R; K]) = expand_s::<ETA, K, L>(&rho_prime)?;
 
     // 5: t ← NTT−1 (cap_a_hat ◦ NTT(s_1)) + s_2        ▷ Compute t = As1 + s2
-    let mut s_1_hat: [T; L] = [T::zero(); L];
-    for i in 0..L {
-        s_1_hat[i] = ntt(&s_1[i]);
-    }
+    let s_1_hat = ntt(&s_1);
     let ntt_p1: [T; K] = helpers::mat_vec_mul(&cap_a_hat, &s_1_hat);
-    let mut t: [R; K] = [R::zero(); K];
-    for l in 0..K {
-        t[l] = inv_ntt(&ntt_p1[l]);
-    }
+    let mut t = inv_ntt(&ntt_p1);
     t = helpers::vec_add(&t, &s_2);
 
     // 6: (t_1 , t_0 ) ← Power2Round(t, d)              ▷ Compress t
@@ -108,32 +102,16 @@ pub(crate) fn sign<
 ) -> Result<[u8; SIG_LEN], &'static str> {
     // 1:  (ρ, K, tr, s_1 , s_2 , t_0 ) ← skDecode(sk)
     #[allow(clippy::type_complexity)]
-    let (rho, cap_k, tr, s_1, s_2, t_0): (
-        [u8; 32],
-        [u8; 32],
-        [u8; 64],
-        [R; L],
-        [R; K],
-        [R; K],
-    ) = sk_decode::<{ D as usize }, ETA, K, L, SK_LEN>(sk)?;
+    let (rho, cap_k, tr, s_1, s_2, t_0) = sk_decode::<{ D as usize }, ETA, K, L, SK_LEN>(sk)?;
 
     // 2:  s_hat_1 ← NTT(s_1)
-    let mut s_hat_1: [T; L] = [T::zero(); L];
-    for i in 0..L {
-        s_hat_1[i] = ntt(&s_1[i]);
-    }
+    let s_hat_1 = ntt(&s_1);
 
     // 3:  s_hat_2 ← NTT(s_2)
-    let mut s_hat_2: [T; K] = [T::zero(); K];
-    for i in 0..K {
-        s_hat_2[i] = ntt(&s_2[i]);
-    }
+    let s_hat_2 = ntt(&s_2);
 
     // 4:  t_hat_0 ← NTT(t_0)
-    let mut t_hat_0: [T; K] = [T::zero(); K];
-    for i in 0..K {
-        t_hat_0[i] = ntt(&t_0[i]);
-    }
+    let t_hat_0 = ntt(&t_0);
 
     // 5:  cap_a_hat ← ExpandA(ρ)    ▷ A is generated and stored in NTT representation as Â
     let cap_a_hat: [[T; L]; K] = expand_a(&rho);
@@ -166,15 +144,9 @@ pub(crate) fn sign<
         let y: [R; L] = expand_mask::<GAMMA1, L>(&rho_prime, k)?;
 
         // 13: w ← NTT−1 (cap_a_hat ◦ NTT(y))
-        let mut ntt_y: [T; L] = [T::zero(); L];
-        for i in 0..L {
-            ntt_y[i] = ntt(&y[i]);
-        }
+        let ntt_y = ntt(&y);
         let ntt_p1: [T; K] = helpers::mat_vec_mul(&cap_a_hat, &ntt_y);
-        let mut w: [R; K] = [R::zero(); K];
-        for l in 0..K {
-            w[l] = inv_ntt(&ntt_p1[l]);
-        }
+        let w = inv_ntt(&ntt_p1);
 
         // 14: w_1 ← HighBits(w)            ▷ Signer’s commitment
         let mut w_1: [R; K] = [R::zero(); K];
@@ -186,11 +158,10 @@ pub(crate) fn sign<
 
         // 15: c_tilde ∈ {0,1}^{2Lambda} ← H(µ || w1Encode(w_1), 2Lambda)     ▷ Commitment hash
         let w1e_len = 32 * K * bitlen(((QU - 1) / (2 * GAMMA2 as u32) - 1) as usize);
-        //assert_eq!(w1e_len, 768);
         let mut w1_tilde = [0u8; 1024];
         w1_encode::<K, GAMMA2>(&w_1, &mut w1_tilde[0..w1e_len])?;
         let mut h99 = h_xof(&[&mu, &w1_tilde[0..w1e_len]]);
-        h99.read(&mut c_tilde); // Ok, to read a bit too much
+        h99.read(&mut c_tilde); // Ok to read a bit too much
 
         // 16: (c_tilde_1 , c_tilde_2) ∈ {0,1}^256 × {0,1}^{2Lambda-256} ← c_tilde    ▷ First 256 bits of commitment hash
         let mut c_tilde_1 = [0u8; 32];
@@ -201,7 +172,7 @@ pub(crate) fn sign<
         let c: R = sample_in_ball::<TAU>(&c_tilde_1)?;
 
         // 18: c_hat ← NTT(c)
-        let c_hat: T = ntt(&c);
+        let c_hat: T = ntt(&[c])[0];
 
         // 19: ⟨⟨c_s_1 ⟩⟩ ← NTT−1 (c_hat ◦ s_hat_1)
         let mut x: [T; L] = [T::zero(); L];
@@ -210,10 +181,7 @@ pub(crate) fn sign<
                 *xij = reduce_q(*chj as i64 * *sh1ij as i64);
             }
         }
-        let mut c_s_1: [R; L] = [R::zero(); L];
-        for i in 0..L {
-            c_s_1[i] = inv_ntt(&x[i]);
-        }
+        let c_s_1 = inv_ntt(&x);
 
         // 20: ⟨⟨c_s_2 ⟩⟩ ← NTT−1 (c_hat ◦ s_hat_2)
         let mut x: [T; K] = [T::zero(); K];
@@ -222,13 +190,9 @@ pub(crate) fn sign<
                 *xij = reduce_q(*chj as i64 * *sh2ij as i64);
             }
         }
-        let mut c_s_2: [R; K] = [R::zero(); K];
-        for i in 0..K {
-            c_s_2[i] = inv_ntt(&x[i]);
-        }
+        let c_s_2 = inv_ntt(&x);
 
         // 21: z ← y + ⟨⟨c_s_1⟩⟩    ▷ Signer’s response
-        //let mut x: [R; L] = [R::zero(); L];
         for i in 0..L {
             for j in 0..256 {
                 z[i][j] = (y[i][j] + c_s_1[i][j]).rem_euclid(QI);
@@ -249,10 +213,8 @@ pub(crate) fn sign<
         if (z_norm >= (GAMMA1 as i32 - BETA as i32)) | (r0_norm >= (GAMMA2 as i32 - BETA as i32)) {
             k += L as u32;
             continue;
-            //
             // 24: else  ... not really needed, with 'continue' above
         }
-        //
         // 25: ⟨⟨c_t_0 ⟩⟩ ← NTT−1 (c_hat ◦ t_hat_0)
         let mut x: [T; K] = [T::zero(); K];
         for (xi, th0i) in x.iter_mut().zip(t_hat_0.iter()) {
@@ -260,15 +222,11 @@ pub(crate) fn sign<
                 *xij = reduce_q(*chj as i64 * *th0ij as i64);
             }
         }
-        let mut c_t_0 = [R::zero(); K];
-        for i in 0..K {
-            c_t_0[i] = inv_ntt(&x[i]);
-        }
+        let c_t_0 = inv_ntt(&x);
 
         // 26: h ← MakeHint(−⟨⟨c_t_0⟩⟩, w − ⟨⟨c_s_2⟩⟩ + ⟨⟨c_t_0⟩⟩)    ▷ Signer’s hint
         let mut mct0 = [R::zero(); K];
         let mut wcc = [R::zero(); K];
-        //let mut hh: [R; K] = [R::zero(); K]; // hh should be R_2
         for i in 0..K {
             for j in 0..256 {
                 mct0[i][j] = (QI - c_t_0[i][j]).rem_euclid(QI);
@@ -276,36 +234,32 @@ pub(crate) fn sign<
                 h[i][j] = make_hint::<GAMMA2>(mct0[i][j], wcc[i][j]) as i32;
             }
         }
-        //h = Some(hh);
 
         // 27: if ||⟨⟨c_t_0⟩⟩||∞ ≥ Gamma2 or the number of 1’s in h is greater than ω, then (z, h) ← ⊥
         if (helpers::infinity_norm(&c_t_0) >= GAMMA2 as i32)
-            | (h.iter().flatten().filter(|i| (**i).abs() == 1).count()
-                > OMEGA)
+            | (h.iter().flatten().filter(|i| (**i).abs() == 1).count() > OMEGA)
         {
             k += L as u32;
             continue;
-        } // 28: end if
-          //
-          // 29: end if
-          //
-          // 30: κ ← κ + ℓ ▷ Increment counter
-          // if we made it here, we passed the 'continue' conditions, so have a solution
+            // 28: end if
+        }
+        // 29: end if
+        //
+        // 30: κ ← κ + ℓ ▷ Increment counter
+        // if we made it here, we passed the 'continue' conditions, so have a solution
         break;
-    } // 31: end while
-      //
-      // 32: σ ← sigEncode(c_tilde, z mod± q, h)
+        // 31: end while
+    }
+    //
+    // 32: σ ← sigEncode(c_tilde, z mod± q, h)
     let mut zmq: [R; L] = [R::zero(); L];
     for i in 0..L {
         for j in 0..256 {
             zmq[i][j] = mod_pm(z[i][j], QU);
         }
     }
-    let sig = sig_encode::<GAMMA1, K, L, LAMBDA, OMEGA, SIG_LEN>(
-        &c_tilde[0..2 * LAMBDA / 8],
-        &zmq,
-        &h,
-    )?;
+    let sig =
+        sig_encode::<GAMMA1, K, L, LAMBDA, OMEGA, SIG_LEN>(&c_tilde[0..2 * LAMBDA / 8], &zmq, &h)?;
 
     Ok(sig) // 33: return σ
 }
@@ -367,16 +321,10 @@ pub(crate) fn verify<
         sample_in_ball::<TAU>(&c_tilde_1[0..32].try_into().map_err(|_e| "c_tilde_1 scrambled")?)?;
 
     // 10: w′_Approx ← invNTT(cap_A_hat ◦ NTT(z) - NTT(c) ◦ NTT(t_1 · 2^d)    ▷ w′_Approx = Az − ct1·2^d
-    let mut ntt_z: [T; L] = [T::zero(); L];
-    for i in 0..L {
-        ntt_z[i] = ntt(&z[i]);
-    }
+    let ntt_z = ntt(&z);
     let ntt_a_z: [T; K] = helpers::mat_vec_mul(&cap_a_hat, &ntt_z);
 
-    let mut ntt_t1: [T; K] = [T::zero(); K];
-    for i in 0..K {
-        ntt_t1[i] = ntt(&t_1[i]);
-    }
+    let ntt_t1 = ntt(&t_1);
     let mut ntt_t1_d2: [T; K] = [T::zero(); K];
     for i in 0..K {
         for j in 0..256 {
@@ -384,7 +332,7 @@ pub(crate) fn verify<
         }
     }
 
-    let ntt_c: T = ntt(&c);
+    let ntt_c = ntt(&[c])[0];
 
     let mut ntt_ct: [T; K] = [T::zero(); K];
     for (ntci, ntdi) in ntt_ct.iter_mut().zip(ntt_t1_d2.iter()) {
@@ -397,7 +345,7 @@ pub(crate) fn verify<
     for i in 0..K {
         let mut tmp = T::zero();
         (0..256).for_each(|j| tmp[j] = ntt_a_z[i][j] - ntt_ct[i][j]);
-        wp_approx[i] = inv_ntt(&tmp);
+        wp_approx[i] = inv_ntt(&[tmp])[0];
     }
 
     // 11: w′_1 ← UseHint(h, w′_Approx)    ▷ Reconstruction of signer’s commitment

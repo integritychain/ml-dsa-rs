@@ -44,7 +44,11 @@ pub const fn bitlen(a: usize) -> usize { a.ilog2() as usize + 1 }
 pub fn mod_pm(m: i32, a: u32) -> i32 {
     let t = m.rem_euclid(a as i32);
     let a = a as i32;
-    if t <= (a / 2) { t } else { t - a }
+    if t <= (a / 2) {
+        t
+    } else {
+        t - a
+    }
 }
 
 
@@ -96,7 +100,7 @@ pub fn infinity_norm<const ROW: usize, const COL: usize>(w: &[[i32; COL]; ROW]) 
 
 /// HAC Algorithm 14.76 Right-to-left binary exponentiation mod Q.
 #[must_use]
-pub(crate) const fn pow_mod_q(g: i32, e: u8) -> i32 {
+const fn pow_mod_q(g: i32, e: u8) -> i32 {
     let g = g as i64;
     let mut result = 1;
     let mut s = g;

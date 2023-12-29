@@ -12,7 +12,7 @@ desktop, browser and embedded applications.
 This crate implements the FIPS 204 **draft** standard in pure Rust with minimal and mainstream dependencies. All 
 three security parameter sets are fully functional. The implementation does not require the standard library, e.g. 
 `#[no_std]`, has no heap allocations, e.g. no `alloc` needed, and exposes the `RNG` so it is suitable for the full 
-range of applications including the bare-metal. The API is stabilized and the code is heavily biased towards safety 
+range of applications down to the bare-metal. The API is stabilized and the code is heavily biased towards safety 
 and correctness; further performance optimizations will be implemented as the standard matures. This crate will 
 quickly follow any changes to FIPS 204 as they become available.
 
@@ -58,7 +58,6 @@ The Rust [Documentation][docs-link] lives under each **Module** corresponding to
 * Requires Rust **1.72** or higher. The minimum supported Rust version may be changed in the future, but 
 it will be done with a minor version bump.
 * All on-by-default features of this library are covered by SemVer.
-* MSRV is considered exempt from SemVer as noted above.
 * This software is experimental and still under active development -- USE AT YOUR OWN RISK!
 
 ## License
